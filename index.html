@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1d4e79">
+<meta name="description" content="Compagnon mobile bilingue pour la collecte des tampons Numazu Machiaruki Stamp.">
+<meta name="robots" content="noindex">  <!-- site perso hébergé sur GitHub Pages : pas de référencement -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<title>Roadbook Numazu — tampons Machiaruki</title>
+<link rel="stylesheet" href="vendor/leaflet.css">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header>
+  <div class="head-row">
+    <div>
+      <h1>Roadbook Numazu</h1>
+      <div class="head-sub">Tampons Machiaruki · checklist bilingue 🇯🇵/🇫🇷</div>
+      <div class="head-sub" id="nowJst" style="margin-top:2px"></div>
+    </div>
+    <button id="themeBtn" class="theme-btn" title="Changer de thème" aria-label="Changer de thème">◑</button>
+  </div>
+  <div class="progress-wrap"><div id="progress" class="progress"></div></div>
+  <div id="progressLabel" class="progress-label">—</div>
+</header>
+
+<section class="controls">
+  <input id="search" type="search" placeholder="Rechercher un lieu, un personnage, un n° (#63)…" aria-label="Rechercher">
+  <div class="row2">
+    <select id="zone" aria-label="Filtrer par zone"><option value="">Toutes les zones</option></select>
+    <select id="sort" aria-label="Trier">
+      <option value="route">Ordre conseillé</option>
+      <option value="distance">Distance actuelle</option>
+      <option value="hours">Heure de fermeture</option>
+      <option value="priority">Priorité horaire</option>
+      <option value="zone">Zone</option>
+      <option value="nameFr">Nom français</option>
+      <option value="nameJa">Nom japonais</option>
+    </select>
+  </div>
+  <div class="row2">
+    <button id="locate" class="btn">📍 Trier autour de moi</button>
+    <button id="dataBtn" class="btn">💾 Sauvegarde</button>
+  </div>
+  <div class="row2">
+    <button id="mapBtn" class="btn">🗺️ Carte</button>
+    <button id="planBtn" class="btn accent">🧭 Parcours</button>
+  </div>
+</section>
+
+<div class="chips" role="tablist" aria-label="Filtres">
+  <button class="chip active" data-filter="all">Tous</button>
+  <button class="chip" data-filter="todo">À faire</button>
+  <button class="chip" data-filter="done">Faits</button>
+  <button class="chip" data-filter="fav">Favoris</button>
+  <button class="chip" data-filter="open">Ouvert</button>
+  <button class="chip" data-filter="early">Ferment tôt</button>
+  <button class="chip" data-filter="active">Actifs seulement</button>
+  <button class="chip" data-filter="ended">Terminés / fermés</button>
+</div>
+
+<div class="notice" id="notice">⚠︎ Horaires issus du KML — à vérifier sur une source officielle avant le voyage. Dates du séjour non renseignées : aucun lieu n'est masqué automatiquement.</div>
+<div class="count-line" id="countLine"></div>
+
+<main id="list" class="list" aria-live="polite"></main>
+
+<button class="fab" id="statsBtn">Résumé</button>
+
+<!-- Fiche détail -->
+<dialog id="detail" aria-label="Détail du lieu">
+  <div class="sheet"><div id="detailBody"></div></div>
+</dialog>
+
+<!-- Résumé -->
+<dialog id="stats" class="dlg-narrow">
+  <div class="sheet">
+    <button class="close-x" onclick="document.getElementById('stats').close()" aria-label="Fermer">×</button>
+    <h2 style="margin:0 0 10px">Résumé de la progression</h2>
+    <div id="statsBody"></div>
+    <div class="sheet-actions" style="margin-top:14px">
+      <button class="btn wide" onclick="document.getElementById('stats').close()">Fermer</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Sauvegarde -->
+<dialog id="dataDlg" class="dlg-narrow">
+  <div class="sheet">
+    <button class="close-x" onclick="document.getElementById('dataDlg').close()" aria-label="Fermer">×</button>
+    <h2 style="margin:0 0 6px">Sauvegarde des données</h2>
+    <p class="meta">La progression est enregistrée dans ce navigateur. Exporte régulièrement un fichier pour ne rien perdre.</p>
+    <div class="sheet-actions">
+      <button id="exportBtn" class="btn accent wide">⬇︎ Exporter la sauvegarde (JSON)</button>
+      <label class="btn wide" style="display:block">⬆︎ Importer une sauvegarde
+        <input id="importFile" type="file" accept="application/json,.json" hidden>
+      </label>
+      <button id="resetBtn" class="btn wide">Réinitialiser la progression</button>
+    </div>
+    <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px">
+      <p class="meta" style="margin:0 0 7px">Exporter les lieux affichés (selon le filtre actuel) — pour GPS, rando, Google Earth ou tableur :</p>
+      <div class="sheet-actions" style="grid-template-columns:1fr 1fr 1fr">
+        <button id="expGpx" class="btn">GPX</button>
+        <button id="expKml" class="btn">KML</button>
+        <button id="expCsv" class="btn">CSV</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Carte (superposition plein écran) -->
+<div id="mapOverlay" class="map-overlay" hidden>
+  <div class="map-bar">
+    <strong>Carte</strong>
+    <span id="mapCount" class="map-count"></span>
+    <div class="map-actions">
+      <button id="mapManholes" class="map-ibtn" title="Plaques Aqours" aria-label="Afficher les plaques Aqours">♪</button>
+      <button id="mapLocate" class="map-ibtn" title="Ma position" aria-label="Ma position">📍</button>
+      <button id="mapFit" class="map-ibtn" title="Recentrer" aria-label="Recentrer">🎯</button>
+      <button id="mapClose" class="map-ibtn" title="Fermer" aria-label="Fermer la carte">✕</button>
+    </div>
+  </div>
+  <div id="rbmap"></div>
+  <div id="rbmapNote" class="map-tile-note">Fond de carte inclus seulement autour des tampons : ailleurs, il faut Internet (hors artefact).</div>
+  <div class="map-legend">
+    <span><i style="background:#d84b4b"></i> À faire</span>
+    <span><i style="background:#e08a2a"></i> Ferme tôt</span>
+    <span><i style="background:#2f9e5f"></i> Fait</span>
+    <span><i style="background:#8a939c"></i> Terminé / fermé</span>
+  </div>
+</div>
+
+<!-- Planificateur de parcours -->
+<dialog id="planner" aria-label="Planifier mon parcours">
+  <div class="sheet">
+    <div class="sheet-grab"></div>
+    <button class="close-x" onclick="document.getElementById('planner').close()" aria-label="Fermer">×</button>
+    <h2 style="margin:0 0 2px">Planifier mon parcours</h2>
+    <p class="meta" style="margin:0 0 8px">Ordre de visite conseillé pour récupérer un maximum de tampons. Estimations indicatives — horaires à vérifier.</p>
+    <div class="plan-form">
+      <div class="seg" id="planTransport">
+        <button type="button" class="seg-btn active" data-t="car">🚗 En voiture</button>
+        <button type="button" class="seg-btn" data-t="transit">🚌 Sans voiture</button>
+      </div>
+      <div class="row2">
+        <label class="plan-field">J'arrive le<input id="planDate" type="date" value="2026-10-15"></label>
+        <label class="plan-field">à<input id="planArriveTime" type="time" value="18:00"></label>
+      </div>
+      <button type="button" id="planNow" class="btn small" title="Replanifier la suite du séjour à partir de l'heure actuelle de Numazu">⏱ Maintenant (heure de Numazu)</button>
+      <div class="row2">
+        <label class="plan-field">Je repars le<input id="planLeaveDate" type="date" value="2026-10-18"></label>
+        <label class="plan-field">à<input id="planLeaveTime" type="time" value="09:00"></label>
+      </div>
+      <div class="row2">
+        <label class="plan-field">Début des journées<input id="planStart" type="time" value="08:00"></label>
+        <label class="plan-field" id="planDaysField">Nombre de jours
+          <select id="planDays"><option>1</option><option selected>2</option><option>3</option></select>
+        </label>
+      </div>
+      <div class="row2">
+        <label class="plan-field">Minutes par lieu<input id="planVisit" type="number" min="1" max="90" value="5"></label>
+        <div class="plan-field" id="planSpan">Séjour : dates non renseignées</div>
+      </div>
+      <label class="plan-check"><input id="planUseLoc" type="checkbox"> Partir de ma position (GPS, sinon dernier tampon coché ou « 📍 Je suis ici »)</label>
+      <label class="plan-check"><input id="planIncludeDone" type="checkbox"> Inclure les tampons déjà obtenus</label>
+      <button id="planGo" class="btn accent">Générer le parcours</button>
+    </div>
+    <div id="planResults"></div>
+  </div>
+</dialog>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script src="vendor/leaflet.js"></script>
+<script src="js/data.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/route-planner.js"></script>
+<script src="js/map.js"></script>
+<script src="js/export.js"></script>
+<script src="js/app.js"></script>
+<script src="js/sw-register.js"></script>
+</body>
+</html>
