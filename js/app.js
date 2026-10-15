@@ -27,13 +27,16 @@
   }
 
   /* --- distance (haversine, km) --- */
+  function km(aLat, aLon, bLat, bLon) {
+    var R = 6371, rad = function (x) { return x * Math.PI / 180; };
+    var dLat = rad(bLat - aLat), dLon = rad(bLon - aLon);
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
   function dist(p) {
     if (state.lat == null || p.latitude == null) return Infinity;
-    var R = 6371, rad = function (x) { return x * Math.PI / 180; };
-    var dLat = rad(p.latitude - state.lat), dLon = rad(p.longitude - state.lon);
-    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(rad(state.lat)) * Math.cos(rad(p.latitude)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    return 2 * R * Math.asin(Math.sqrt(a));
+    return km(state.lat, state.lon, p.latitude, p.longitude);
   }
 
   /* --- où je suis : GPS quand le navigateur le permet (jamais dans l'artefact),
@@ -51,14 +54,19 @@
       " (" + t.date.slice(8, 10) + "/" + t.date.slice(5, 7) + " " + t.time + ")";
     return h;
   }
-  function locateMe(done) {
-    function fallback() { var h = here(); if (h) done(h); else toast(NO_POS); }
-    if (!navigator.geolocation) { fallback(); return; }
-    toast("Localisation…");
+  // Relevé GPS précis : done({lat, lon, acc}), enregistré comme ma position,
+  // ou done(null) si le GPS est absent, refusé ou trop long (10 s).
+  function gpsFix(done) {
+    if (!navigator.geolocation) { done(null); return; }
     navigator.geolocation.getCurrentPosition(function (pos) {
-      Store.setHere({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-      done(here());
-    }, fallback, { timeout: 10000, maximumAge: 60000 });
+      var fix = { lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy };
+      Store.setHere(fix);
+      done(fix);
+    }, function () { done(null); }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+  }
+  function locateMe(done) {
+    if (navigator.geolocation) toast("Localisation…");
+    gpsFix(function () { var h = here(); if (h) done(h); else toast(NO_POS); });
   }
 
   function needsCheck(p) {
@@ -223,6 +231,7 @@
     state.lon = pos ? pos.lon : null;
     var arr = filtered();
     updateProgress();
+    refreshPlanChecks();
     var total = PLACES.length;
     $("#countLine").textContent = arr.length + " lieu" + (arr.length > 1 ? "x" : "") +
       " affiché" + (arr.length > 1 ? "s" : "") + " sur " + total +
@@ -336,6 +345,9 @@
   /* --- délégation d'événements --- */
   function showOnMap(p) {
     if (!window.RBMap) { toast("Carte indisponible"); return; }
+    // la carte n'est pas un dialogue : un parcours ouvert (fiche ouverte depuis
+    // l'itinéraire) resterait par-dessus
+    if ($("#planner").open) $("#planner").close();
     var arr = filtered();
     if (!arr.some(function (x) { return x.id === p.id; })) arr = arr.concat([p]);
     window.RBMap.focus(arr, p.id);
@@ -576,10 +588,30 @@
     saveTrip();
     toast("Arrivée réglée sur maintenant : " + n.date.slice(8, 10) + "/" + n.date.slice(5, 7) + " à " + n.time);
   });
+  // Point de départ du parcours. « Partir de ma position » : le GPS, relevé au
+  // moment du calcul. Sans GPS (refusé, artefact…), la dernière position connue
+  // (« 📍 Je suis ici » ou dernier tampon coché), en le disant. À plus de
+  // FAR_KM de Numazu (dans le train, encore en France…), départ de la gare.
+  // done(start, label, live) : start = {lat, lon}, ou null pour la gare ;
+  // live = les liens Google Maps partent de la position réelle du téléphone.
+  var FAR_KM = 50;
+  function planStart(done) {
+    if (!$("#planUseLoc").checked) { done(null, "gare de Numazu", false); return; }
+    $("#planResults").innerHTML = '<p class="plan-note">📍 Localisation…</p>';
+    gpsFix(function (fix) {
+      if (fix) render(); // distances de la liste depuis ce nouveau point
+      var pos = fix || here();
+      if (!pos) { toast(NO_POS); done(null, "gare de Numazu", false); return; }
+      var st = window.RoutePlanner.STATION, d = km(pos.lat, pos.lon, st.lat, st.lon);
+      if (d > FAR_KM) { done(null, "gare de Numazu (ta position est à " + Math.round(d) + " km)", false); return; }
+      done({ lat: pos.lat, lon: pos.lon }, fix
+        ? "ta position GPS (±" + Math.round(fix.acc) + " m)"
+        : "GPS indisponible, dernière position connue : " + pos.label, true);
+    });
+  }
+
   $("#planGo").addEventListener("click", function () {
     if (!window.RoutePlanner) { toast("Moteur d'itinéraire indisponible"); return; }
-    var useLoc = $("#planUseLoc").checked, pos = useLoc ? here() : null;
-    if (useLoc && !pos) toast(NO_POS);
     var params = {
       transport: planTransport,
       startTime: $("#planStart").value || "08:00",
@@ -589,27 +621,31 @@
       arriveTime: $("#planArriveTime").value || null,
       leaveDate: $("#planLeaveDate").value || null,
       leaveTime: $("#planLeaveTime").value || null,
-      includeDone: $("#planIncludeDone").checked,
-      start: pos ? { lat: pos.lat, lon: pos.lon } : undefined
+      includeDone: $("#planIncludeDone").checked
     };
-    // Le moteur compare plusieurs variantes (~1 s sur téléphone) : on affiche
-    // d'abord un message, puis on calcule une fois l'écran redessiné.
     var btn = this;
     btn.disabled = true;
-    $("#planResults").innerHTML = '<p class="plan-note">⏳ Calcul du parcours…</p>';
-    setTimeout(function () {
-      var r = window.RoutePlanner.plan(PLACES, params, function (id) { return Store.isDone(id); });
-      btn.disabled = false;
-      if (r.error) {
-        lastPlan = null;
-        $("#planResults").innerHTML = '<div class="notice" style="margin:12px 0 0">⚠︎ ' +
-          escapeHtml(r.error) + "</div>";
-        toast(r.error);
-        return;
-      }
-      lastPlan = r;
-      $("#planResults").innerHTML = renderPlan(r, pos ? pos.label : "gare de Numazu");
-    }, 30);
+    planStart(function (start, startLabel, live) {
+      if (start) params.start = start;
+      params.liveStart = live;
+      // Le moteur compare plusieurs variantes (~1 s sur téléphone) : on affiche
+      // d'abord un message, puis on calcule une fois l'écran redessiné.
+      $("#planResults").innerHTML = '<p class="plan-note">⏳ Calcul du parcours…</p>';
+      setTimeout(function () {
+        var r = window.RoutePlanner.plan(PLACES, params, function (id) { return Store.isDone(id); });
+        btn.disabled = false;
+        if (r.error) {
+          lastPlan = null;
+          $("#planResults").innerHTML = '<div class="notice" style="margin:12px 0 0">⚠︎ ' +
+            escapeHtml(r.error) + "</div>";
+          toast(r.error);
+          return;
+        }
+        lastPlan = r;
+        $("#planResults").innerHTML = renderPlan(r, startLabel);
+        refreshPlanChecks();
+      }, 30);
+    });
   });
 
   // Durée du séjour déduite des deux dates ; « nombre de jours » n'est
@@ -638,8 +674,35 @@
   $("#planResults").addEventListener("click", function (e) {
     if (e.target.closest("#planExport") && lastPlan && window.RBExport) {
       saved(window.RBExport.downloadRoute(lastPlan), "Parcours GPX exporté");
+      return;
+    }
+    var op = e.target.closest("[data-plan-open]");
+    if (op) {
+      var p = PLACES.find(function (x) { return x.id === +op.dataset.planOpen; });
+      if (p) openDetail(p);
     }
   });
+  // Cocher un arrêt = tampon obtenu, comme dans la liste. Le parcours garde son
+  // ordre : pour recalculer la suite, « Générer le parcours » à nouveau.
+  $("#planResults").addEventListener("change", function (e) {
+    var cb = e.target.closest("[data-plan-done]");
+    if (cb) { Store.setDone(+cb.dataset.planDone, cb.checked); render(); }
+  });
+  // Cases de l'itinéraire alignées sur la progression (cochée ici, dans la liste,
+  // la fiche ou la carte) et compteur « N ✓ » de chaque journée.
+  function refreshPlanChecks() {
+    Array.prototype.forEach.call(document.querySelectorAll("#planResults .plan-day"), function (day) {
+      var n = 0;
+      Array.prototype.forEach.call(day.querySelectorAll("[data-plan-done]"), function (cb) {
+        var done = Store.isDone(+cb.dataset.planDone);
+        cb.checked = done;
+        cb.closest(".stop").classList.toggle("is-done", done);
+        if (done) n++;
+      });
+      var c = day.querySelector("[data-day-done]");
+      if (c) c.textContent = n ? " · " + n + " ✓" : "";
+    });
+  }
 
   function renderPlan(r, startLabel) {
     function periode() {
@@ -667,7 +730,7 @@
       html += '<div class="plan-day"><div class="plan-day-head"><div>Jour ' + d.day +
         (d.dateLabel ? " — " + escapeHtml(d.dateLabel) : "") +
         ' <span class="sub">' + d.stops.length + " arrêt" + (d.stops.length > 1 ? "s" : "") +
-        " · " + d.startTime + "→" + d.endTime +
+        "<span data-day-done></span> · " + d.startTime + "→" + d.endTime +
         (longue ? " · ⚠︎ journée de " + duree(d) : "") + "</span></div>" +
         (d.gmaps ? '<a target="_blank" rel="noopener" href="' + d.gmaps + '">Itinéraire ↗</a>' : "") + "</div>";
       if (!d.stops.length) html += '<div class="stop"><div class="body"><div class="sub">Aucun lieu ce jour.</div></div></div>';
@@ -677,7 +740,9 @@
         var closeTxt = s.closeMin != null ? "ferme " + fmtHM(s.closeMin) : "";
         var tight = s.marginMin != null && s.marginMin <= 25;
         var fr = s.nameStatus === "uncertain" ? "" : (s.nameFr || "");
-        html += '<div class="stop"><div class="t">' + s.arrive + '</div><div class="body">' +
+        html += '<div class="stop">' +
+          '<input class="check" type="checkbox" data-plan-done="' + s.id + '" aria-label="Tampon obtenu : #' + s.id + '">' +
+          '<div class="t">' + s.arrive + '</div><div class="body" data-plan-open="' + s.id + '">' +
           '<div class="n">#' + s.id + " " + escapeHtml(oneLine(s.nameJa)) +
           (fr ? ' <span class="fr">' + escapeHtml(fr) + "</span>" : "") + "</div>" +
           '<div class="sub">' + escapeHtml(s.zoneFr) + (s.member ? " · ★ " + escapeHtml(s.member) : "") +

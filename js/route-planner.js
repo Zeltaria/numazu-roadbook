@@ -7,6 +7,8 @@
  * compris) et remplir le temps gagné, en gardant une marge avant fermeture.
  *
  * plan(places, params, isDone) -> { params, days:[...], excluded:[...], summary }
+ * params.start : point de départ {lat, lon} (gare par défaut) ; params.liveStart :
+ * ce départ est « ma position », les liens Google Maps partent alors du téléphone.
  */
 window.RoutePlanner = (function () {
   "use strict";
@@ -520,7 +522,7 @@ window.RoutePlanner = (function () {
         day: i + 1, date: today.iso, dateLabel: today.label,
         startTime: fmt(today.start), closeTime: fmt(today.end),
         endTime: stops.length ? stops[stops.length - 1].depart : fmt(today.start),
-        stops: stops, gmaps: gmapsDir(start, stops, prof.gmaps)
+        stops: stops, gmaps: gmapsDir(params.liveStart ? null : start, stops, prof.gmaps)
       });
     });
 
@@ -583,13 +585,14 @@ window.RoutePlanner = (function () {
   }
 
   // URL Google Maps directions multi-étapes (max 9 points intermédiaires).
+  // Sans origine, Google Maps part de la position réelle du téléphone.
   function gmapsDir(start, stops, mode) {
     if (!stops.length) return "";
     var pts = stops.map(function (s) { return s.lat + "," + s.lon; });
     var dest = pts[pts.length - 1];
     var mids = pts.slice(0, -1).slice(0, 9);
     var url = "https://www.google.com/maps/dir/?api=1&travelmode=" + (mode || "driving") +
-      "&origin=" + start.lat + "," + start.lon + "&destination=" + dest;
+      (start ? "&origin=" + start.lat + "," + start.lon : "") + "&destination=" + dest;
     if (mids.length) url += "&waypoints=" + mids.join("|");
     return url;
   }
