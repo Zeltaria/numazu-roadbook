@@ -907,6 +907,9 @@ textarea.note {
 .stop .sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
 .stop .m { font-size: 11px; white-space: nowrap; color: var(--ok); font-weight: 600; }
 .stop .m.tight { color: var(--danger); }
+.stop .check { align-self: center; margin-top: 0; }
+.stop .body[data-plan-open] { cursor: pointer; }
+.stop.is-done { opacity: .62; }
 .lunch { padding: 6px 12px; font-size: 12px; color: var(--warn); background: var(--warn-soft); border-top: 1px solid var(--line); }
 .plan-excl { margin-top: 12px; }
 .plan-excl summary { cursor: pointer; font-weight: 600; font-size: 14px; padding: 6px 0; }
@@ -1288,13 +1291,22 @@ window.NUMAZU_DATA = {"meta": {"generatedFrom": "source/numazu-machiaruki-stamp.
 <script>
 /* route-planner.js — moteur de parcours (roadbook §11 et §12).
  * Logique pure, hors-ligne, sans dépendance. Heuristique (pas d'optimum
- * exact) : filtrer les lieux atteignables/ouverts, suivre un corridor par
- * zones, choisir à chaque étape le lieu le plus proche (un lieu qui ferme
- * bientôt vaut un détour), ne pas revenir dans une zone quittée, puis
- * retoucher chaque journée (déplacer / inverser des arrêts, retour à la base
- * compris) et remplir le temps gagné, en gardant une marge avant fermeture.
+ * exact) de tournées avec horaires d'ouverture :
+ *  1. insertion : chaque lieu va dans le jour et à la place où il allonge le
+ *     moins le trajet, là où ses horaires tiennent ; trois façons de s'y
+ *     prendre (lieux sans alternative d'abord, moins chers d'abord, jour 1
+ *     rempli avant le jour 2…) ;
+ *  2. retouche : déplacer / inverser des arrêts dans la journée, passer un
+ *     arrêt d'un jour à l'autre ; le temps gagné sert aux lieux restants ;
+ *  3. ruine et reconstruction : retirer un tronçon ou un groupe de lieux
+ *     voisins, les réinsérer, garder si c'est mieux.
+ * On garde la meilleure des trois. Pas de couloir de zones imposé : l'ordre
+ * suit la géographie, d'où moins d'allers-retours. Chaque journée part de la
+ * base et y revient. Tirages à graine fixe : même séjour, même parcours.
  *
  * plan(places, params, isDone) -> { params, days:[...], excluded:[...], summary }
+ * params.start : point de départ {lat, lon} (gare par défaut) ; params.liveStart :
+ * ce départ est « ma position », les liens Google Maps partent alors du téléphone.
  */
 window.RoutePlanner = (function () {
   "use strict";
@@ -1317,6 +1329,14 @@ window.RoutePlanner = (function () {
                 "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
   var MARGIN = 10;    // minutes de marge avant la fermeture
   var MAX_DAYS = 14;  // garde-fou si les deux dates sont très éloignées
+
+  // Ce que vaut un parcours, en minutes de route : un tampon de plus vaut au
+  // plus STAMP_MIN de route en plus ; une minute de journée en plus (attente
+  // comprise) coûte END_W ; un tampon remis d'un jour coûte LATER_DAY (mieux
+  // vaut profiter du temps tout de suite et garder de la marge pour la fin).
+  var STAMP_MIN = 60, END_W = 0.25, LATER_DAY = 6;
+  var LNS_ROUNDS = 10;    // tours de ruine et reconstruction par construction
+  var SEED = 0x2F6E2B1;   // graine des tirages
 
   // Écho des paramètres du séjour, renvoyé aussi bien en succès qu'en erreur.
   function tripParams(params, days, dates) {
@@ -1373,35 +1393,7 @@ window.RoutePlanner = (function () {
     return isNaN(ms) ? null : Math.round(ms / 86400000);
   }
 
-  // Plusieurs variantes, on garde celle qui place le plus de tampons, puis le
-  // moins de trajet (jamais pire qu'une stratégie seule) :
-  //  - en voiture sur plusieurs jours, le grand tour de l'ouest (Heda, Nishiura)
-  //    le jour 1, 2, 3 ou 4 — sinon un lieu de ville ouvert seulement le jour 1
-  //    est sacrifié ;
-  //  - corridor strict, ou « souple » (petits détours pour un lieu qui va fermer,
-  //    courte attente avant de quitter une zone) : chacune gagne selon le séjour.
   function plan(allPlaces, params, isDone) {
-    var car = (params && params.transport) !== "transit";
-    var anyWest = allPlaces.some(function (p) { return !p.ended && HARD_WITHOUT_CAR[p.zone]; });
-    var best = null;
-    [false, true].forEach(function (flex) {
-      var first = planOnce(allPlaces, params, isDone, car ? 1 : null, flex);
-      keep(first);
-      if (!car || !anyWest || first.error || first.days.length < 2) return;
-      first.days.forEach(function (d, i) {
-        // une journée qui commence l'après-midi ou finit avant 14 h ne peut pas porter le grand tour
-        if (i === 0 || i > 3 || d.startTime >= "12:00" || d.closeTime < "14:00") return;
-        keep(planOnce(allPlaces, params, isDone, i + 1, flex));
-      });
-    });
-    return best;
-    function keep(r) {
-      if (!best || r.summary.planned > best.summary.planned ||
-          (r.summary.planned === best.summary.planned && r.summary.travelMin < best.summary.travelMin)) best = r;
-    }
-  }
-
-  function planOnce(allPlaces, params, isDone, westDay, flex) {
     params = params || {};
 
     // Séjour incohérent : on le dit, plutôt que de rendre un parcours bancal.
@@ -1440,6 +1432,7 @@ window.RoutePlanner = (function () {
       var info = arriveDate ? isoDay(arriveDate, i) : { iso: null, weekday: null, label: null };
       info.start = (i === 0 && params.arriveTime) ? toMin(params.arriveTime) : dayStart;
       info.end = (i === days - 1 && params.leaveTime) ? toMin(params.leaveTime) : dayEnd;
+      info.index = i;
       schedule.push(info);
     }
     // Seule une heure de départ explicite peut être « avant l'arrivée » : la
@@ -1453,10 +1446,10 @@ window.RoutePlanner = (function () {
     function travelMin(a, b) { return roadKm(a, b) * prof.detour / prof.speed * 60; }
     function P(p) { return { lat: p.latitude, lon: p.longitude }; }
 
-    // --- déjeuner : on cale la pause sur un restaurant quand c'est possible ---
+    // --- déjeuner : au resto du parcours quand il y en a un vers midi ---
     var LUNCH_AT = 12 * 60 + 30;                  // pause déclenchée à partir de 12 h 30
+    var LUNCH_LATE = 14 * 60;                     // resto atteint au plus tard à 14 h
     var MEAL_CATS = { restaurant: 1, sushi: 1, cafe: 1, bakery: 1 };
-    var MEAL_DETOUR_KM = 4;                        // resto retenu seulement s'il est proche
     var meal = prof.lunch;                         // durée d'un arrêt-repas (= tampon + repas)
     // « meal » curé par lieu (café sans cuisine, pâtisserie…) prime sur la catégorie
     function isMeal(p) { return p.meal != null ? !!p.meal : !!MEAL_CATS[p.category]; }
@@ -1476,33 +1469,21 @@ window.RoutePlanner = (function () {
       if (p.closingMinutes != null) return (t + dur) <= (p.closingMinutes - MARGIN);
       return null; // pas d'info d'horaire
     }
-    // Prochaine ouverture après l'instant t (null si aucune plage connue à venir).
-    function nextOpening(p, t) {
+    // Début de visite le plus tôt à partir de t, attente comprise (-1 : rien ne
+    // tient ce jour-là). Horaires inconnus : pas de devinette le soir.
+    function fit(p, t, dur) {
+      var open = openAt(p, t, dur);
+      if (open) return t;
+      if (open === null) return t < normalEnd ? t : -1;
       var iv = p.openIntervals || [];
-      for (var i = 0; i < iv.length; i++) if (iv[i][0] > t) return iv[i][0];
-      return null;
+      for (var i = 0; i < iv.length; i++) if (iv[i][0] > t && openAt(p, iv[i][0], dur)) return iv[i][0];
+      return -1;
     }
     // Dernière fermeture connue d'un lieu (null si aucun horaire).
     function lastClose(p) {
       var iv = p.openIntervals || [];
       if (iv.length) return iv[iv.length - 1][1];
       return p.closingMinutes == null ? null : p.closingMinutes;
-    }
-    function nearestMeal(pos0, now, wd, endMin) {
-      var best = null, bestD = 1e9;
-      for (var i = 0; i < cands.length; i++) {
-        var c = cands[i];
-        if (placed[c.id] || !isMeal(c) || c.latitude == null) continue;
-        if (closedOn(c, wd)) continue; // pas de déjeuner dans un resto fermé ce jour
-        var dkm = roadKm(pos0, P(c));
-        if (dkm > MEAL_DETOUR_KM) continue;
-        var af = now + travelMin(pos0, P(c));
-        var open = openAt(c, af, meal);
-        if (open === false || (open === null && af >= normalEnd)) continue;
-        if (af + meal + MARGIN > endMin || tooFarByBus(c, af + meal)) continue;
-        if (dkm < bestD) { bestD = dkm; best = c; }
-      }
-      return best;
     }
     function makeStop(c, arr, dep, closeMin, lunchBefore, isMealStop) {
       return {
@@ -1526,7 +1507,7 @@ window.RoutePlanner = (function () {
       if (p.latitude == null) { excluded.push({ p: p, reason: "Coordonnées manquantes" }); return; }
       if (!params.includeDone && isDone && isDone(p.id)) return; // déjà obtenu
       // Exclu seulement s'il est fermé TOUS les jours prévus ; sinon il sera
-      // reporté sur un jour où il ouvre (voir la simulation ci-dessous).
+      // placé un jour où il ouvre.
       var closedAll = schedule.every(function (s) { return closedOn(p, s.weekday); });
       if (closedAll) {
         var jours = schedule.map(function (s) { return s.label; }).join(", ");
@@ -1538,34 +1519,7 @@ window.RoutePlanner = (function () {
       cands.push(p);
     });
 
-    // Lieux ouverts un seul jour du séjour (séjour de 2 jours ou plus) : ce
-    // jour-là, s'ils vont fermer, ils justifient un détour hors du corridor.
-    var onlyDay = {};
-    if (flex && days > 1) cands.forEach(function (c) {
-      if (schedule.filter(function (s) { return !closedOn(c, s.weekday); }).length === 1) onlyDay[c.id] = true;
-    });
-
-    // 2) corridor : ordre de zones (le choix dans une zone se fait au plus proche, cf. 3)
-    var zoneRank = {};
-    if (params.transport === "transit") {
-      // sans voiture : Uchiura/centre d'abord, ouest (Heda/Nishiura) en dernier
-      ["uchiura_mito_awashima", "south_shimokanuki", "port_senbon", "centre_station",
-       "centre_extended", "north_outskirts", "nishiura", "heda_west"].forEach(function (z, i) { zoneRank[z] = i; });
-    }
-    function rank(p) {
-      var r = params.transport === "transit"
-        ? (zoneRank[p.zone] == null ? 50 : zoneRank[p.zone])
-        : (p.zoneOrder || 50);
-      // ce n'est pas le jour du grand tour : l'ouest passe en dernier
-      return westDay && d !== westDay && HARD_WITHOUT_CAR[p.zone] ? r + 100 : r;
-    }
-    cands.sort(function (a, b) {
-      return rank(a) - rank(b) ||
-        (a.closingMinutes == null ? 1e9 : a.closingMinutes) - (b.closingMinutes == null ? 1e9 : b.closingMinutes) ||
-        a.id - b.id;
-    });
-
-    // 2 bis) la soirée : chaque journée s'étire jusqu'à la dernière fermeture
+    // 2) la soirée : chaque journée s'étire jusqu'à la dernière fermeture
     // connue parmi les candidats (24:00, 26:00… notation japonaise du KML).
     // L'heure de départ du dernier jour, elle, reste une borne dure.
     var nightEnd = normalEnd;
@@ -1578,29 +1532,9 @@ window.RoutePlanner = (function () {
       if (!fixedByDeparture) s.end = nightEnd;
     });
 
-    // 3) simulation jour par jour. Le prochain arrêt est le plus « rentable » :
-    // trajet + attente, avec un bonus pour un lieu qui ferme bientôt (il vaut
-    // un détour). On finit la zone en cours avant d'avancer dans le corridor,
-    // et on ne revient dans une zone quittée que s'il ne reste rien plus loin :
-    // c'est ce qui supprime les allers-retours.
-    var URGENT = 60, URGENT_W = 0.75; // jusqu'à 45 min de détour pour un lieu qui va fermer
-    var WAIT_OK = 15;                 // attente acceptable devant un lieu qui ouvre bientôt
-    var WAIT_ZONE = flex ? 30 : -1;   // ... et avant de quitter une zone qu'on ne reverra pas
-    var NEAR_DETOUR = flex ? 15 : -1; // trajet max. d'un détour hors zone pour un lieu qui va fermer
-    // Dernier début de visite possible dans la plage qui contient t.
-    function latestStart(p, t, dur) {
-      var iv = p.openIntervals || [];
-      for (var i = 0; i < iv.length; i++) if (t >= iv[i][0] && t < iv[i][1]) return iv[i][1] - MARGIN - dur;
-      return p.closingMinutes != null ? p.closingMinutes - MARGIN - dur : Infinity;
-    }
-    function cheapest(opts) {
-      return opts.reduce(function (a, b) { return b.cost < a.cost ? b : a; });
-    }
-
-    // Temps de trajet précalculés entre candidats et depuis le départ (indice
-    // SIDX) : la retouche des journées en consulte des centaines de milliers.
-    var KI = {}, N = cands.length + 1, SIDX = cands.length, MAT = new Float64Array(N * N);
-    cands.forEach(function (c, i) { KI[c.id] = i; });
+    // Temps de trajet précalculés entre candidats et depuis la base (indice
+    // SIDX) : la construction et la retouche en consultent des millions.
+    var N = cands.length + 1, SIDX = cands.length, MAT = new Float64Array(N * N);
     for (var mi = 0; mi < N; mi++) {
       for (var mj = 0; mj < N; mj++) {
         MAT[mi * N + mj] = travelMin(mi === SIDX ? start : P(cands[mi]), mj === SIDX ? start : P(cands[mj]));
@@ -1609,56 +1543,186 @@ window.RoutePlanner = (function () {
     function tm(a, b) { return MAT[a * N + b]; }
     // Sans voiture, Heda/Nishiura seulement si l'on peut en revenir avant la fin
     // de journée normale (les bus du soir y sont rares ou inexistants).
-    function tooFarByBus(p, leaveAt) {
-      return params.transport === "transit" && HARD_WITHOUT_CAR[p.zone] &&
-        leaveAt + tm(KI[p.id], SIDX) > normalEnd;
+    function tooFarByBus(k, leaveAt) {
+      return params.transport === "transit" && HARD_WITHOUT_CAR[cands[k].zone] &&
+        leaveAt + tm(k, SIDX) > normalEnd;
     }
 
-    // Horaires d'une tournée (liste d'arrêts { p, k, lunch, meal, pause }), avec
-    // les mêmes règles que la construction ; null si un horaire ne tient plus.
-    function retime(seq, today) {
-      var t = today.start, at = SIDX, travel = 0, times = [];
+    // 3) Horaires d'une journée (suite d'indices de candidats), au départ de la
+    // base : attente devant un lieu pas encore ouvert ; déjeuner (journée
+    // commencée avant 12 h 30) au premier resto atteint entre 12 h et 14 h
+    // — tampon + repas —, sinon une pause avant le premier arrêt après 12 h 30.
+    // Le retour à la base compte dans le trajet. null si un horaire ne tient pas.
+    function simulate(seq, today) {
+      var t = today.start, at = SIDX, travel = 0, times = [], durs = [], lunch = -1, mealStop = false;
+      var lunchDay = today.start < LUNCH_AT;
       for (var i = 0; i < seq.length; i++) {
-        var it = seq[i], tr = tm(at, it.k), dur = it.meal ? meal : visit;
+        var k = seq[i], p = cands[k], tr = tm(at, k), a = t + tr, s = a, dur = visit;
         travel += tr;
-        var s = t + tr + (it.pause ? prof.lunch : 0);
-        if (it.lunch) s = Math.max(s, LUNCH_AT - 30); // pas de repas avant midi
-        var open = openAt(it.p, s, dur);
-        if (open === false) {
-          s = nextOpening(it.p, s);
-          if (s == null || !openAt(it.p, s, dur)) return null;
-        } else if (open === null && s >= normalEnd) return null;
-        if (s + dur + MARGIN > today.end || tooFarByBus(it.p, s + dur)) return null;
-        times.push(s);
-        t = s + dur; at = it.k;
+        if (lunchDay && lunch < 0 && a >= LUNCH_AT - 30) {
+          var sm = isMeal(p) && a <= LUNCH_LATE ? fit(p, a, meal) : -1;
+          if (sm >= 0) { lunch = i; mealStop = true; s = sm; dur = meal; }
+          else if (a >= LUNCH_AT) { lunch = i; s = a + prof.lunch; }
+        }
+        s = fit(p, s, dur);
+        if (s < 0 || s + dur + MARGIN > today.end || tooFarByBus(k, s + dur)) return null;
+        times.push(s); durs.push(dur);
+        t = s + dur; at = k;
       }
-      // le retour à la base compte : finir loin n'est pas une économie
-      return { times: times, travel: travel + tm(at, SIDX), end: t };
+      return { times: times, durs: durs, travel: travel + tm(at, SIDX), end: t,
+               lunch: lunch, meal: mealStop, day: today.index };
+    }
+    function cost(sim) { return sim.travel + END_W * sim.end + LATER_DAY * sim.day * sim.times.length; }
+
+    // Dernier début de visite possible d'un lieu ce jour-là, à partir de t0
+    // (horaires, fin de journée, dernier bus), sans compter le déjeuner.
+    function latestStart(k, t0, dur, today) {
+      var p = cands[k], iv = p.openIntervals || [], L;
+      if (iv.length) {
+        L = -1;
+        for (var i = 0; i < iv.length; i++) if (iv[i][1] - MARGIN - dur >= t0) { L = iv[i][1] - MARGIN - dur; if (t0 >= iv[i][0]) break; }
+        if (L < 0) return -1;
+      } else if (p.closingMinutes != null) L = p.closingMinutes - MARGIN - dur;
+      else L = normalEnd - 0.001;
+      L = Math.min(L, today.end - MARGIN - dur);
+      if (params.transport === "transit" && HARD_WITHOUT_CAR[p.zone]) L = Math.min(L, normalEnd - tm(k, SIDX) - dur);
+      return L;
+    }
+    // Retard que chaque arrêt peut encaisser sans casser la suite de la journée
+    // (attentes devant les lieux comprises) : sert à écarter d'avance les
+    // insertions impossibles, avant de simuler les autres.
+    function slackOf(seq, sim, today) {
+      if (sim.slack) return sim.slack;
+      var n = seq.length, ms = new Array(n);
+      for (var i = n - 1; i >= 0; i--) {
+        var own = latestStart(seq[i], sim.times[i], sim.durs[i], today) - sim.times[i];
+        if (i === n - 1) { ms[i] = own; continue; }
+        var idle = sim.times[i + 1] - (sim.times[i] + sim.durs[i] + tm(seq[i], seq[i + 1])) -
+          (sim.lunch === i + 1 && !sim.meal ? prof.lunch : 0);
+        ms[i] = Math.min(own, Math.max(0, idle) + ms[i + 1]);
+      }
+      sim.slack = ms;
+      return ms;
     }
 
-    // 3 bis) Retouche d'une journée : déplacer un bloc de 1 à 3 arrêts ailleurs,
-    // ou inverser un tronçon, dès que le trajet raccourcit sans finir plus tard
-    // ni casser un horaire (le repas ne bouge pas). Rattrape les lieux « oubliés »
-    // par le choix au plus proche, qu'on reviendrait sinon chercher en fin de journée.
-    function improve(seq, today) {
-      var best = retime(seq, today), cur = seq, changed = false;
-      if (!best) return null;
-      // indice de la position i d'une tournée ; avant le 1er et après le dernier : la base
-      function at(arr, i) { return i < 0 || i >= arr.length ? SIDX : arr[i].k; }
+    var D = schedule.length, nC = cands.length;
+    var routes, sims, cache, dayOf = [], okDays = [];
+    cands.forEach(function (c) {
+      dayOf.push(-1);
+      okDays.push(schedule.map(function (s, d) { return closedOn(c, s.weekday) ? -1 : d; })
+        .filter(function (d) { return d >= 0; }));
+    });
+    // Sans voiture, Heda / Nishiura ne prennent que le temps qui reste.
+    var late = cands.map(function (c) { return params.transport === "transit" && !!HARD_WITHOUT_CAR[c.zone]; });
+    function placedCount() { return dayOf.filter(function (d) { return d >= 0; }).length; }
+    function value() {
+      var c = 0;
+      sims.forEach(function (x) { c += cost(x); });
+      return placedCount() * STAMP_MIN - c;
+    }
+
+    // Meilleure insertion du candidat k dans le jour d : { k, d, seq, sim, cost }
+    // ou null. Places essayées de la moins chère à la plus chère en trajet,
+    // celles qui ne peuvent pas tenir écartées d'avance ; on s'arrête après
+    // trois places dont les horaires tiennent.
+    var TOL = 1; // minutes de tolérance du tri préalable
+    function bestInsert(k, d) {
+      var r = routes[d], today = schedule[d], sim0 = sims[d], base = cost(sim0), pos = [];
+      var lastK = latestStart(k, today.start, visit, today);
+      if (lastK < 0) return null;
+      for (var j = 0; j <= r.length; j++) {
+        var a = j ? r[j - 1] : SIDX, b = j < r.length ? r[j] : SIDX;
+        pos.push([tm(a, k) + tm(k, b) - tm(a, b), j]);
+      }
+      pos.sort(function (x, y) { return x[0] - y[0]; });
+      var ms = slackOf(r, sim0, today), best = null, found = 0;
+      for (var i = 0; i < pos.length && found < 3; i++) {
+        var at = pos[i][1], prev = at ? r[at - 1] : SIDX;
+        var arrive = (at ? sim0.times[at - 1] + sim0.durs[at - 1] : today.start) + tm(prev, k);
+        if (arrive > lastK + TOL) continue;
+        if (at < r.length) {
+          var sk = fit(cands[k], arrive, visit);
+          if (sk < 0 && arrive < LUNCH_AT - 30) continue;
+          var delay = (sk < 0 ? arrive : sk) + visit + tm(k, r[at]) - sim0.times[at];
+          if (delay > ms[at] + TOL) continue;
+        }
+        var seq = r.slice(0, at);
+        seq.push(k);
+        seq = seq.concat(r.slice(at));
+        var sim = simulate(seq, today);
+        if (!sim) continue;
+        found++;
+        var c = cost(sim) - base;
+        if (!best || c < best.cost) best = { k: k, d: d, seq: seq, sim: sim, cost: c };
+      }
+      return best;
+    }
+    function refreshDay(d) {
+      for (var k = 0; k < nC; k++) {
+        if (!cache[k]) cache[k] = [];
+        if (dayOf[k] < 0 && okDays[k].indexOf(d) >= 0) cache[k][d] = bestInsert(k, d);
+      }
+    }
+    function put(o) { routes[o.d] = o.seq; sims[o.d] = o.sim; dayOf[o.k] = o.d; refreshDay(o.d); }
+
+    // Insertion de tous les lieux possibles. regretFirst : à chaque tour, le
+    // lieu qui perdrait le plus à ne pas aller dans son meilleur jour (un seul
+    // jour possible = priorité) ; sinon le moins cher.
+    function insertAll(regretFirst) {
+      for (var d0 = 0; d0 < D; d0++) refreshDay(d0);
+      for (var phase = 0; phase < 2; phase++) for (;;) {
+        var pick = null, pickRegret = -1;
+        for (var k = 0; k < nC; k++) {
+          if (dayOf[k] >= 0 || late[k] !== (phase === 1)) continue;
+          var b1 = null, b2 = null;
+          for (var q = 0; q < okDays[k].length; q++) {
+            var o = cache[k][okDays[k][q]];
+            if (!o) continue;
+            if (!b1 || o.cost < b1.cost) { b2 = b1; b1 = o; } else if (!b2 || o.cost < b2.cost) b2 = o;
+          }
+          if (!b1) continue;
+          var regret = !regretFirst ? 0 : b2 ? b2.cost - b1.cost : 1e6;
+          if (!pick || regret > pickRegret + 1e-6 ||
+              (regret > pickRegret - 1e-6 && b1.cost < pick.cost)) { pick = b1; pickRegret = regret; }
+        }
+        if (!pick) break;
+        put(pick);
+      }
+    }
+    // Remplissage jour après jour : le jour 1 d'abord, au moins cher, puis le 2…
+    function insertByDay() {
+      for (var d = 0; d < D; d++) {
+        refreshDay(d);
+        for (;;) {
+          var pick = null;
+          for (var k = 0; k < nC; k++) {
+            if (dayOf[k] >= 0 || late[k]) continue;
+            var o = cache[k][d];
+            if (o && (!pick || o.cost < pick.cost)) pick = o;
+          }
+          if (!pick) break;
+          put(pick);
+        }
+      }
+    }
+
+    // Retouche d'une journée : déplacer un bloc de 1 à 3 arrêts (à l'endroit ou
+    // à l'envers) ailleurs, ou inverser un tronçon, dès que la journée coûte
+    // moins sans casser un horaire.
+    function improveDay(d) {
+      var cur = routes[d], best = sims[d], changed = false;
+      function at(arr, i) { return i < 0 || i >= arr.length ? SIDX : arr[i]; }
       function accept(cand) {
-        var t = retime(cand, today);
-        if (!t || t.travel > best.travel - 0.01 || t.end > best.end + 0.01) return false;
-        cur = cand; best = t; changed = true; return true;
+        var s = simulate(cand, schedule[d]);
+        if (!s || cost(s) > cost(best) - 0.01) return false;
+        cur = cand; best = s; changed = true; return true;
       }
       function onePass() {
         var n = cur.length, i, j, k;
         for (k = 1; k <= 3; k++) {
           for (i = 0; i + k <= n; i++) {
-            var blk = cur.slice(i, i + k);
-            if (blk.some(function (it) { return it.lunch; })) continue;
-            var rest = cur.slice(0, i).concat(cur.slice(i + k));
-            var a = at(cur, i - 1), f = blk[0].k, l = blk[k - 1].k;
-            var nx = at(cur, i + k); // après le dernier arrêt : retour à la base
+            var blk = cur.slice(i, i + k), rest = cur.slice(0, i).concat(cur.slice(i + k));
+            var a = at(cur, i - 1), f = blk[0], l = blk[k - 1], nx = at(cur, i + k);
             var gain = tm(a, f) + tm(l, nx) - tm(a, nx);
             for (j = 0; j <= rest.length; j++) {
               if (j === i) continue; // remis à sa place
@@ -1671,191 +1735,151 @@ window.RoutePlanner = (function () {
           }
         }
         for (i = 0; i < n - 1; i++) {
-          if (cur[i].lunch) continue;
-          for (j = i + 1; j < n && !cur[j].lunch; j++) {
+          for (j = i + 1; j < n; j++) {
             var p0 = at(cur, i - 1), b = at(cur, j + 1);
-            var delta = tm(p0, cur[j].k) - tm(p0, cur[i].k) + tm(cur[i].k, b) - tm(cur[j].k, b);
+            var delta = tm(p0, cur[j]) - tm(p0, cur[i]) + tm(cur[i], b) - tm(cur[j], b);
             if (delta < -0.01 && accept(cur.slice(0, i).concat(cur.slice(i, j + 1).reverse(), cur.slice(j + 1)))) return true;
           }
         }
         return false;
       }
-      for (var pass = 0; pass < 300 && onePass(); pass++) { /* première amélioration trouvée, on recommence */ }
-      return changed ? { seq: cur, times: best } : null;
+      for (var pass = 0; pass < 500 && onePass(); pass++) { /* première amélioration trouvée, on recommence */ }
+      routes[d] = cur; sims[d] = best;
+      return changed;
     }
-
-    var placed = {};
-    var skippedClosing = {};
-    var closedOnPass = {};
-    var travelTotal = 0; // minutes de trajet, retours à la base compris
-    var plans = [];      // tournée de chaque jour, avant la passe entre les jours
-    var result = [];
-    for (var d = 1; d <= days; d++) {
-      var today = schedule[d - 1];
-      var time = today.start, pos = start, lunchTaken = false, pause = false, seq = [];
-      var reached = -1; // rang du corridor atteint ce jour-là
-      // Pause déjeuner seulement si la journée a commencé avant midi : arriver
-      // à 14 h ou 18 h ne doit pas déclencher un déjeuner.
-      var lunchDay = today.start < LUNCH_AT;
-
-      // Visite de c (durée dur) depuis la position et l'heure courantes :
-      // { c, arrive, start, cost }, ou null si impossible aujourd'hui.
-      var option = function (c, dur) {
-        var arrive = time + travelMin(pos, P(c)), s = arrive;
-        var open = openAt(c, s, dur);
-        if (open === false) { // fermé à l'arrivée : rouvre-t-il assez tôt ?
-          var next = nextOpening(c, s);
-          if (next == null || next + dur + MARGIN > today.end) {
-            if (c.closingMinutes != null && s + dur > c.closingMinutes - MARGIN) skippedClosing[c.id] = c.closingMinutes;
-            else closedOnPass[c.id] = true;
-            return null;
-          }
-          s = next;
-          if (!openAt(c, s, dur)) return null; // plage trop courte pour la visite
-        }
-        if (open === null && s >= normalEnd) return null; // pas de devinette le soir
-        if (s + dur + MARGIN > today.end) return null;      // journée pleine pour ce point
-        if (tooFarByBus(c, s + dur)) return null;
-        var slack = latestStart(c, s, dur) - s;
-        return { c: c, arrive: arrive, start: s, slack: slack,
-                 cost: (s - time) - URGENT_W * Math.max(0, URGENT - slack) };
-      };
-
-      var take = function (c, s, lunch, isMealStop) {
-        seq.push({ p: c, k: KI[c.id], s: s, lunch: lunch, meal: isMealStop, pause: lunch && !isMealStop });
-        placed[c.id] = true; time = s + (isMealStop ? meal : visit); pos = P(c);
-      };
-
-      var fill = function () {
-        var guard = 0;
-        while (guard++ < 2000) {
-          var opts = [];
-          cands.forEach(function (c) {
-            if (placed[c.id] || closedOn(c, today.weekday)) return;
-            var o = option(c, visit);
-            if (o) opts.push(o);
-          });
-          if (!opts.length) break;
-          var pool = opts.filter(function (o) { return rank(o.c) >= reached; });
-          if (!pool.length) pool = opts; // plus rien en aval : retour autorisé
-          // la zone la plus en amont d'abord, sans attendre si d'autres lieux sont ouverts
-          var ready = pool.filter(function (o) { return o.start - o.arrive <= WAIT_OK; });
-          if (ready.length) {
-            var r0 = Math.min.apply(null, ready.map(function (o) { return rank(o.c); }));
-            // on ne quitte pas pour de bon la zone en cours si un lieu y ouvre sous peu : on l'attend
-            var soon = r0 > reached && reached >= 0 ? pool.filter(function (o) {
-              return rank(o.c) === reached && o.start - time <= WAIT_ZONE;
-            }) : [];
-            pool = soon.length ? soon : ready.filter(function (o) { return rank(o.c) === r0; });
-          }
-          // Hors corridor, seul un lieu sur le point de fermer peut s'inviter : s'il
-          // est tout proche (le bonus couvre le trajet), ou si c'est son seul jour
-          // d'ouverture du séjour (sinon il est perdu).
-          opts.forEach(function (o) {
-            var worth = onlyDay[o.c.id] || (o.cost < 0 && o.arrive - time <= NEAR_DETOUR);
-            if (worth && o.slack < URGENT && o.start - o.arrive <= WAIT_OK && pool.indexOf(o) < 0) pool.push(o);
-          });
-          var pick = cheapest(pool), c = pick.c;
-
-          // déjeuner à partir de 12 h 30 : sur place si c'est un resto, sinon
-          // dans un resto proche, sinon une simple pause avant l'arrêt suivant
-          if (lunchDay && !lunchTaken && pick.arrive >= LUNCH_AT) {
-            var here = isMeal(c) ? option(c, meal) : null;
-            lunchTaken = true;
-            if (here) { take(c, here.start, true, true); reached = Math.max(reached, rank(c)); continue; }
-            var food = nearestMeal(pos, time, today.weekday, today.end);
-            if (food) take(food, time + travelMin(pos, P(food)), true, true); // détour repas
-            else { time += prof.lunch; pause = true; }
-            continue;
-          }
-          take(c, pick.start, pause, false);
-          pause = false;
-          reached = Math.max(reached, rank(c));
-        }
-      };
-
-      fill();
-      // retouche, puis on remplit le temps gagné (jusqu'à 3 tours)
-      var sched = retime(seq, today);
-      for (var round = 0; round < 3 && sched; round++) {
-        var better = improve(seq, today);
-        if (!better) break;
-        seq = better.seq; sched = better.times;
-        var last = seq[seq.length - 1], before = seq.length;
-        time = sched.end; pos = P(last.p); reached = rank(last.p); pause = false;
-        fill();
-        sched = retime(seq, today);
-        if (seq.length === before) break;
-      }
-      plans.push({ seq: seq, sched: sched, today: today });
-    }
-
-    // 3 ter) Entre les jours : un arrêt passe au jour où le parcours passe à
-    // côté (un konbini lointain pris le jeudi soir alors que vendredi y va de
-    // toute façon), si le trajet total raccourcit et que tout tient encore.
-    moveBetweenDays();
-
-    plans.forEach(function (pl, i) {
-      var better = pl.sched && improve(pl.seq, pl.today);
-      if (better) { pl.seq = better.seq; pl.sched = better.times; }
-      var today = pl.today, sched = pl.sched;
-      travelTotal += sched ? sched.travel : 0;
-      var stops = pl.seq.map(function (it, k) {
-        var s = sched ? sched.times[k] : it.s;
-        return makeStop(it.p, s, s + (it.meal ? meal : visit), it.p.closingMinutes, it.lunch, it.meal);
-      });
-      result.push({
-        day: i + 1, date: today.iso, dateLabel: today.label,
-        startTime: fmt(today.start), closeTime: fmt(today.end),
-        endTime: stops.length ? stops[stops.length - 1].depart : fmt(today.start),
-        stops: stops, gmaps: gmapsDir(start, stops, prof.gmaps)
-      });
-    });
-
-    function moveBetweenDays() {
-      function at(arr, i) { return i < 0 || i >= arr.length ? SIDX : arr[i].k; }
-      function onePass() {
-        for (var a = 0; a < plans.length; a++) {
-          var A = plans[a];
-          if (!A.sched) continue;
-          for (var i = 0; i < A.seq.length; i++) {
-            var it = A.seq[i];
-            if (it.lunch) continue; // le repas ne bouge pas
-            var p0 = at(A.seq, i - 1), p1 = at(A.seq, i + 1);
-            var gain = tm(p0, it.k) + tm(it.k, p1) - tm(p0, p1);
-            for (var b = 0; b < plans.length; b++) {
-              var B = plans[b];
-              if (b === a || !B.sched || closedOn(it.p, B.today.weekday)) continue;
-              for (var j = 0; j <= B.seq.length; j++) {
-                var q0 = at(B.seq, j - 1), q1 = at(B.seq, j);
-                if (tm(q0, it.k) + tm(it.k, q1) - tm(q0, q1) > gain - 1) continue; // ≥ 1 min gagnée
-                var seqA = A.seq.slice(0, i).concat(A.seq.slice(i + 1));
-                var seqB = B.seq.slice(0, j).concat([it], B.seq.slice(j));
-                var ta = retime(seqA, A.today), tb = ta && retime(seqB, B.today);
-                if (!ta || !tb) continue;
-                A.seq = seqA; A.sched = ta; B.seq = seqB; B.sched = tb;
-                return true;
-              }
+    // Un arrêt passe dans un autre jour si l'ensemble coûte moins.
+    function relocate() {
+      for (var a = 0; a < D; a++) {
+        for (var i = 0; i < routes[a].length; i++) {
+          var k = routes[a][i];
+          var rest = routes[a].slice(0, i).concat(routes[a].slice(i + 1));
+          var sa = simulate(rest, schedule[a]);
+          if (!sa) continue;
+          var gain = cost(sims[a]) - cost(sa);
+          for (var q = 0; q < okDays[k].length; q++) {
+            var b = okDays[k][q];
+            if (b === a) continue;
+            var o = bestInsert(k, b);
+            if (o && o.cost < gain - 0.5) {
+              routes[a] = rest; sims[a] = sa; routes[b] = o.seq; sims[b] = o.sim; dayOf[k] = b;
+              return true;
             }
           }
         }
-        return false;
       }
-      for (var pass = 0; pass < 300 && onePass(); pass++) { /* un déplacement à la fois */ }
+      return false;
     }
 
+    // Une construction complète : insertion, puis retouches tant qu'elles
+    // déplacent des arrêts ou font de la place pour d'autres lieux.
+    function solve(strategy) {
+      routes = []; sims = []; cache = [];
+      schedule.forEach(function (s) { routes.push([]); sims.push(simulate([], s)); });
+      for (var k = 0; k < nC; k++) dayOf[k] = -1;
+      if (strategy === "byDay") insertByDay();
+      insertAll(strategy !== "cheap");
+      for (var round = 0; round < 4; round++) {
+        var before = placedCount(), moved = false;
+        for (var d1 = 0; d1 < D; d1++) if (improveDay(d1)) moved = true;
+        for (var guard = 0; guard < 200 && relocate(); guard++) moved = true;
+        for (var d2 = 0; d2 < D; d2++) improveDay(d2);
+        insertAll(strategy !== "cheap"); // le temps gagné sert aux lieux restants
+        if (!moved && placedCount() === before) break;
+      }
+    }
+
+    // Ruine et reconstruction : on retire un tronçon d'une journée, ou un groupe
+    // de lieux voisins (tous jours confondus), on les réinsère, et on garde si
+    // le parcours y gagne. Tirages pseudo-aléatoires à graine fixe.
+    var seed = SEED;
+    function rnd() {
+      seed = (seed + 0x6D2B79F5) | 0;
+      var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+    function ruin() {
+      var removed = [], d, k;
+      if (rnd() < 0.5) {
+        var full = [];
+        for (d = 0; d < D; d++) if (routes[d].length) full.push(d);
+        if (!full.length) return false;
+        d = full[Math.floor(rnd() * full.length)];
+        var r = routes[d], L = Math.min(r.length, 3 + Math.floor(rnd() * 10));
+        var i0 = Math.floor(rnd() * (r.length - L + 1));
+        removed = r.slice(i0, i0 + L);
+        routes[d] = r.slice(0, i0).concat(r.slice(i0 + L));
+      } else {
+        var on = [];
+        for (k = 0; k < nC; k++) if (dayOf[k] >= 0) on.push(k);
+        if (!on.length) return false;
+        var c0 = on[Math.floor(rnd() * on.length)];
+        on.sort(function (a, b) { return tm(c0, a) - tm(c0, b); });
+        removed = on.slice(0, 5 + Math.floor(rnd() * 10));
+        var out = {};
+        removed.forEach(function (x) { out[x] = true; });
+        for (d = 0; d < D; d++) routes[d] = routes[d].filter(function (x) { return !out[x]; });
+      }
+      removed.forEach(function (x) { dayOf[x] = -1; });
+      for (d = 0; d < D; d++) { sims[d] = simulate(routes[d], schedule[d]); if (!sims[d]) return false; }
+      return true;
+    }
+    function ruinAndRecreate(rounds) {
+      var bestVal = value(), keep = { routes: routes.slice(), sims: sims.slice(), dayOf: dayOf.slice() };
+      for (var it = 0; it < rounds; it++) {
+        if (ruin()) {
+          insertAll(rnd() < 0.5);
+          for (var d = 0; d < D; d++) improveDay(d);
+          insertAll(true);
+        }
+        var v = sims.every(Boolean) ? value() : -Infinity;
+        if (v > bestVal + 0.01) { bestVal = v; keep = { routes: routes.slice(), sims: sims.slice(), dayOf: dayOf.slice() }; }
+        else { routes = keep.routes.slice(); sims = keep.sims.slice(); dayOf = keep.dayOf.slice(); }
+      }
+    }
+
+    // Trois constructions (lieux sans alternative d'abord, moins chers
+    // d'abord, jour après jour), chacune retouchée puis passée à la ruine et
+    // reconstruction ; on garde la meilleure.
+    var bestSol = null;
+    ["regret", "cheap", "byDay"].forEach(function (strategy) {
+      solve(strategy);
+      ruinAndRecreate(LNS_ROUNDS);
+      var v = value();
+      if (!bestSol || v > bestSol.value) bestSol = { routes: routes, sims: sims, dayOf: dayOf.slice(), value: v };
+    });
+    routes = bestSol.routes; sims = bestSol.sims; dayOf = bestSol.dayOf;
+
+    var travelTotal = 0, result = [];
+    schedule.forEach(function (today, d) {
+      var sim = sims[d];
+      travelTotal += sim.travel;
+      var stops = routes[d].map(function (k, i) {
+        var c = cands[k], s = sim.times[i], ml = sim.meal && i === sim.lunch;
+        return makeStop(c, s, s + (ml ? meal : visit), c.closingMinutes, i === sim.lunch, ml);
+      });
+      result.push({
+        day: d + 1, date: today.iso, dateLabel: today.label,
+        startTime: fmt(today.start), closeTime: fmt(today.end),
+        endTime: stops.length ? stops[stops.length - 1].depart : fmt(today.start),
+        stops: stops, gmaps: gmapsDir(params.liveStart ? null : start, stops, prof.gmaps)
+      });
+    });
+
     // 4) candidats non placés -> exclusions motivées
-    cands.forEach(function (c) {
-      if (placed[c.id]) return;
+    cands.forEach(function (c, k) {
+      if (dayOf[k] >= 0) return;
       var reason;
-      if (params.transport === "transit" && HARD_WITHOUT_CAR[c.zone])
+      if (late[k])
         reason = "Très difficile sans voiture (" + c.zoneFr + ")";
-      else if (skippedClosing[c.id] != null)
-        reason = "Ferme trop tôt pour être atteint à temps (" + fmt(skippedClosing[c.id]) + ")";
-      else if (closedOnPass[c.id])
-        reason = "Fermé au moment où le parcours passe (" + (c.hoursFr || "horaires en plusieurs plages") + ")";
-      else
+      else if (okDays[k].some(function (d) { return simulate([k], schedule[d]); }))
         reason = "Au-delà de la capacité de " + days + " jour" + (days > 1 ? "s" : "");
+      else if (lastClose(c) != null && okDays[k].every(function (d) {
+        return schedule[d].start + tm(SIDX, k) + visit > lastClose(c) - MARGIN;
+      }))
+        reason = "Ferme trop tôt pour être atteint à temps (" + fmt(lastClose(c)) + ")";
+      else
+        reason = "Fermé au moment où le parcours passe (" + (c.hoursFr || "horaires en plusieurs plages") + ")";
       excluded.push({ p: c, reason: reason });
     });
 
@@ -1871,13 +1895,14 @@ window.RoutePlanner = (function () {
   }
 
   // URL Google Maps directions multi-étapes (max 9 points intermédiaires).
+  // Sans origine, Google Maps part de la position réelle du téléphone.
   function gmapsDir(start, stops, mode) {
     if (!stops.length) return "";
     var pts = stops.map(function (s) { return s.lat + "," + s.lon; });
     var dest = pts[pts.length - 1];
     var mids = pts.slice(0, -1).slice(0, 9);
     var url = "https://www.google.com/maps/dir/?api=1&travelmode=" + (mode || "driving") +
-      "&origin=" + start.lat + "," + start.lon + "&destination=" + dest;
+      (start ? "&origin=" + start.lat + "," + start.lon : "") + "&destination=" + dest;
     if (mids.length) url += "&waypoints=" + mids.join("|");
     return url;
   }
@@ -2267,13 +2292,16 @@ window.RBExport = (function () {
   }
 
   /* --- distance (haversine, km) --- */
+  function km(aLat, aLon, bLat, bLon) {
+    var R = 6371, rad = function (x) { return x * Math.PI / 180; };
+    var dLat = rad(bLat - aLat), dLon = rad(bLon - aLon);
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
   function dist(p) {
     if (state.lat == null || p.latitude == null) return Infinity;
-    var R = 6371, rad = function (x) { return x * Math.PI / 180; };
-    var dLat = rad(p.latitude - state.lat), dLon = rad(p.longitude - state.lon);
-    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(rad(state.lat)) * Math.cos(rad(p.latitude)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    return 2 * R * Math.asin(Math.sqrt(a));
+    return km(state.lat, state.lon, p.latitude, p.longitude);
   }
 
   /* --- où je suis : GPS quand le navigateur le permet (jamais dans l'artefact),
@@ -2291,14 +2319,19 @@ window.RBExport = (function () {
       " (" + t.date.slice(8, 10) + "/" + t.date.slice(5, 7) + " " + t.time + ")";
     return h;
   }
-  function locateMe(done) {
-    function fallback() { var h = here(); if (h) done(h); else toast(NO_POS); }
-    if (!navigator.geolocation) { fallback(); return; }
-    toast("Localisation…");
+  // Relevé GPS précis : done({lat, lon, acc}), enregistré comme ma position,
+  // ou done(null) si le GPS est absent, refusé ou trop long (10 s).
+  function gpsFix(done) {
+    if (!navigator.geolocation) { done(null); return; }
     navigator.geolocation.getCurrentPosition(function (pos) {
-      Store.setHere({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-      done(here());
-    }, fallback, { timeout: 10000, maximumAge: 60000 });
+      var fix = { lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy };
+      Store.setHere(fix);
+      done(fix);
+    }, function () { done(null); }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+  }
+  function locateMe(done) {
+    if (navigator.geolocation) toast("Localisation…");
+    gpsFix(function () { var h = here(); if (h) done(h); else toast(NO_POS); });
   }
 
   function needsCheck(p) {
@@ -2463,6 +2496,7 @@ window.RBExport = (function () {
     state.lon = pos ? pos.lon : null;
     var arr = filtered();
     updateProgress();
+    refreshPlanChecks();
     var total = PLACES.length;
     $("#countLine").textContent = arr.length + " lieu" + (arr.length > 1 ? "x" : "") +
       " affiché" + (arr.length > 1 ? "s" : "") + " sur " + total +
@@ -2576,6 +2610,9 @@ window.RBExport = (function () {
   /* --- délégation d'événements --- */
   function showOnMap(p) {
     if (!window.RBMap) { toast("Carte indisponible"); return; }
+    // la carte n'est pas un dialogue : un parcours ouvert (fiche ouverte depuis
+    // l'itinéraire) resterait par-dessus
+    if ($("#planner").open) $("#planner").close();
     var arr = filtered();
     if (!arr.some(function (x) { return x.id === p.id; })) arr = arr.concat([p]);
     window.RBMap.focus(arr, p.id);
@@ -2816,10 +2853,30 @@ window.RBExport = (function () {
     saveTrip();
     toast("Arrivée réglée sur maintenant : " + n.date.slice(8, 10) + "/" + n.date.slice(5, 7) + " à " + n.time);
   });
+  // Point de départ du parcours. « Partir de ma position » : le GPS, relevé au
+  // moment du calcul. Sans GPS (refusé, artefact…), la dernière position connue
+  // (« 📍 Je suis ici » ou dernier tampon coché), en le disant. À plus de
+  // FAR_KM de Numazu (dans le train, encore en France…), départ de la gare.
+  // done(start, label, live) : start = {lat, lon}, ou null pour la gare ;
+  // live = les liens Google Maps partent de la position réelle du téléphone.
+  var FAR_KM = 50;
+  function planStart(done) {
+    if (!$("#planUseLoc").checked) { done(null, "gare de Numazu", false); return; }
+    $("#planResults").innerHTML = '<p class="plan-note">📍 Localisation…</p>';
+    gpsFix(function (fix) {
+      if (fix) render(); // distances de la liste depuis ce nouveau point
+      var pos = fix || here();
+      if (!pos) { toast(NO_POS); done(null, "gare de Numazu", false); return; }
+      var st = window.RoutePlanner.STATION, d = km(pos.lat, pos.lon, st.lat, st.lon);
+      if (d > FAR_KM) { done(null, "gare de Numazu (ta position est à " + Math.round(d) + " km)", false); return; }
+      done({ lat: pos.lat, lon: pos.lon }, fix
+        ? "ta position GPS (±" + Math.round(fix.acc) + " m)"
+        : "GPS indisponible, dernière position connue : " + pos.label, true);
+    });
+  }
+
   $("#planGo").addEventListener("click", function () {
     if (!window.RoutePlanner) { toast("Moteur d'itinéraire indisponible"); return; }
-    var useLoc = $("#planUseLoc").checked, pos = useLoc ? here() : null;
-    if (useLoc && !pos) toast(NO_POS);
     var params = {
       transport: planTransport,
       startTime: $("#planStart").value || "08:00",
@@ -2829,27 +2886,31 @@ window.RBExport = (function () {
       arriveTime: $("#planArriveTime").value || null,
       leaveDate: $("#planLeaveDate").value || null,
       leaveTime: $("#planLeaveTime").value || null,
-      includeDone: $("#planIncludeDone").checked,
-      start: pos ? { lat: pos.lat, lon: pos.lon } : undefined
+      includeDone: $("#planIncludeDone").checked
     };
-    // Le moteur compare plusieurs variantes (~1 s sur téléphone) : on affiche
-    // d'abord un message, puis on calcule une fois l'écran redessiné.
     var btn = this;
     btn.disabled = true;
-    $("#planResults").innerHTML = '<p class="plan-note">⏳ Calcul du parcours…</p>';
-    setTimeout(function () {
-      var r = window.RoutePlanner.plan(PLACES, params, function (id) { return Store.isDone(id); });
-      btn.disabled = false;
-      if (r.error) {
-        lastPlan = null;
-        $("#planResults").innerHTML = '<div class="notice" style="margin:12px 0 0">⚠︎ ' +
-          escapeHtml(r.error) + "</div>";
-        toast(r.error);
-        return;
-      }
-      lastPlan = r;
-      $("#planResults").innerHTML = renderPlan(r, pos ? pos.label : "gare de Numazu");
-    }, 30);
+    planStart(function (start, startLabel, live) {
+      if (start) params.start = start;
+      params.liveStart = live;
+      // Le moteur compare plusieurs variantes (~1 s sur téléphone) : on affiche
+      // d'abord un message, puis on calcule une fois l'écran redessiné.
+      $("#planResults").innerHTML = '<p class="plan-note">⏳ Calcul du parcours…</p>';
+      setTimeout(function () {
+        var r = window.RoutePlanner.plan(PLACES, params, function (id) { return Store.isDone(id); });
+        btn.disabled = false;
+        if (r.error) {
+          lastPlan = null;
+          $("#planResults").innerHTML = '<div class="notice" style="margin:12px 0 0">⚠︎ ' +
+            escapeHtml(r.error) + "</div>";
+          toast(r.error);
+          return;
+        }
+        lastPlan = r;
+        $("#planResults").innerHTML = renderPlan(r, startLabel);
+        refreshPlanChecks();
+      }, 30);
+    });
   });
 
   // Durée du séjour déduite des deux dates ; « nombre de jours » n'est
@@ -2878,8 +2939,35 @@ window.RBExport = (function () {
   $("#planResults").addEventListener("click", function (e) {
     if (e.target.closest("#planExport") && lastPlan && window.RBExport) {
       saved(window.RBExport.downloadRoute(lastPlan), "Parcours GPX exporté");
+      return;
+    }
+    var op = e.target.closest("[data-plan-open]");
+    if (op) {
+      var p = PLACES.find(function (x) { return x.id === +op.dataset.planOpen; });
+      if (p) openDetail(p);
     }
   });
+  // Cocher un arrêt = tampon obtenu, comme dans la liste. Le parcours garde son
+  // ordre : pour recalculer la suite, « Générer le parcours » à nouveau.
+  $("#planResults").addEventListener("change", function (e) {
+    var cb = e.target.closest("[data-plan-done]");
+    if (cb) { Store.setDone(+cb.dataset.planDone, cb.checked); render(); }
+  });
+  // Cases de l'itinéraire alignées sur la progression (cochée ici, dans la liste,
+  // la fiche ou la carte) et compteur « N ✓ » de chaque journée.
+  function refreshPlanChecks() {
+    Array.prototype.forEach.call(document.querySelectorAll("#planResults .plan-day"), function (day) {
+      var n = 0;
+      Array.prototype.forEach.call(day.querySelectorAll("[data-plan-done]"), function (cb) {
+        var done = Store.isDone(+cb.dataset.planDone);
+        cb.checked = done;
+        cb.closest(".stop").classList.toggle("is-done", done);
+        if (done) n++;
+      });
+      var c = day.querySelector("[data-day-done]");
+      if (c) c.textContent = n ? " · " + n + " ✓" : "";
+    });
+  }
 
   function renderPlan(r, startLabel) {
     function periode() {
@@ -2907,7 +2995,7 @@ window.RBExport = (function () {
       html += '<div class="plan-day"><div class="plan-day-head"><div>Jour ' + d.day +
         (d.dateLabel ? " — " + escapeHtml(d.dateLabel) : "") +
         ' <span class="sub">' + d.stops.length + " arrêt" + (d.stops.length > 1 ? "s" : "") +
-        " · " + d.startTime + "→" + d.endTime +
+        "<span data-day-done></span> · " + d.startTime + "→" + d.endTime +
         (longue ? " · ⚠︎ journée de " + duree(d) : "") + "</span></div>" +
         (d.gmaps ? '<a target="_blank" rel="noopener" href="' + d.gmaps + '">Itinéraire ↗</a>' : "") + "</div>";
       if (!d.stops.length) html += '<div class="stop"><div class="body"><div class="sub">Aucun lieu ce jour.</div></div></div>';
@@ -2917,7 +3005,9 @@ window.RBExport = (function () {
         var closeTxt = s.closeMin != null ? "ferme " + fmtHM(s.closeMin) : "";
         var tight = s.marginMin != null && s.marginMin <= 25;
         var fr = s.nameStatus === "uncertain" ? "" : (s.nameFr || "");
-        html += '<div class="stop"><div class="t">' + s.arrive + '</div><div class="body">' +
+        html += '<div class="stop">' +
+          '<input class="check" type="checkbox" data-plan-done="' + s.id + '" aria-label="Tampon obtenu : #' + s.id + '">' +
+          '<div class="t">' + s.arrive + '</div><div class="body" data-plan-open="' + s.id + '">' +
           '<div class="n">#' + s.id + " " + escapeHtml(oneLine(s.nameJa)) +
           (fr ? ' <span class="fr">' + escapeHtml(fr) + "</span>" : "") + "</div>" +
           '<div class="sub">' + escapeHtml(s.zoneFr) + (s.member ? " · ★ " + escapeHtml(s.member) : "") +

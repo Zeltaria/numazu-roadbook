@@ -10,7 +10,7 @@
  *
  * Pour publier une mise à jour, incrémenter CACHE_VERSION.
  */
-const CACHE_VERSION = "numazu-roadbook-v10";
+const CACHE_VERSION = "numazu-roadbook-v12";
 const SHELL_CACHE = CACHE_VERSION + "-shell";
 const TILE_CACHE = CACHE_VERSION + "-tiles";
 const TILE_LIMIT = 350;
