@@ -130,15 +130,16 @@ test("pas d'aller-retour de plus de 15 km pour un seul tampon (séjour depuis Uc
   }
 });
 
-// Ancien moteur sur ces 10 séjours : 1 168 tampons planifiés, 4 003 min de route.
+// Ancien moteur sur ces 10 séjours, avec la base mise à jour le 16/10/2026 :
+// 1 153 tampons planifiés, 4 054 min de route (à remesurer si la base change).
 test("au moins autant de tampons que l'ancien moteur, avec nettement moins de route", () => {
   let planned = 0, travel = 0;
   for (const [name, over] of SCENARIOS) {
     const r = planFor(name, over);
     planned += r.summary.planned; travel += r.summary.travelMin;
   }
-  assert.ok(planned >= 1168, planned + " tampons planifiés (ancien moteur : 1 168)");
-  assert.ok(travel <= 3700, travel + " min de route (ancien moteur : 4 003)");
+  assert.ok(planned >= 1153, planned + " tampons planifiés (ancien moteur : 1 153)");
+  assert.ok(travel <= 3700, travel + " min de route (ancien moteur : 4 054)");
 });
 
 // En replanifiant le matin (« ⏱ Maintenant »), la journée du jour reste la plus
