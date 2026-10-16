@@ -7,6 +7,14 @@
   var PLACES = DATA.places || [];
   var Store = window.RBStore;
 
+  // « Terminé » : d'après la liste officielle (data.js), ou signalé sur place
+  // (magasin fermé, tampon retiré…). p.ended reste le seul drapeau que lisent
+  // la liste, la carte et le planificateur ; p.endedInSource garde l'origine.
+  PLACES.forEach(function (p) { p.endedInSource = !!p.ended; });
+  function syncEnded() {
+    PLACES.forEach(function (p) { p.ended = p.endedInSource || Store.isEnded(p.id); });
+  }
+
   var PRIORITY_ORDER = { "Très tôt": 0, "Tôt": 1, "À confirmer": 2, "Normal": 3, "Exclure": 9 };
 
   var state = { filter: "all", zone: "", sort: "route", q: "", lat: null, lon: null };
@@ -175,7 +183,8 @@
 
   /* --- badges --- */
   function priorityBadge(p) {
-    if (p.ended) return '<span class="badge ended"><span class="dot"></span>Terminé / fermé</span>';
+    if (p.ended) return '<span class="badge ended"><span class="dot"></span>' +
+      (p.endedInSource ? "Terminé / fermé" : "Terminé (signalé par toi)") + "</span>";
     var cls = p.priority === "Très tôt" ? "veryearly" : p.priority === "Tôt" ? "early" :
       p.priority === "À confirmer" ? "confirm" : "ok";
     return '<span class="badge ' + cls + '"><span class="dot"></span>' + escapeHtml(p.priority) + "</span>";
@@ -226,6 +235,7 @@
   }
 
   function render() {
+    syncEnded();
     var pos = here();
     state.lat = pos ? pos.lat : null;
     state.lon = pos ? pos.lon : null;
@@ -279,6 +289,23 @@
       "</div></div>";
   }
 
+  // Tampon signalé terminé sur place : rappel dans la fiche, et le bouton pour
+  // le signaler ou l'annuler (rien pour un lieu que la liste officielle donne
+  // déjà terminé, ni pour un tampon déjà obtenu).
+  function endedBanner(p) {
+    if (!Store.isEnded(p.id)) return "";
+    var t = Store.jstParts(Store.endedAt(p.id));
+    return '<div class="verif">⛔ Signalé terminé par toi le ' + t.date.slice(8, 10) + "/" + t.date.slice(5, 7) +
+      " : il n'apparaît plus dans les parcours.</div>";
+  }
+  function endedButton(p) {
+    if (p.endedInSource) return "";
+    if (Store.isEnded(p.id))
+      return '<button class="btn wide" data-ended="' + p.id + '">↺ Remettre en jeu (de nouveau disponible)</button>';
+    if (Store.isDone(p.id)) return "";
+    return '<button class="btn wide" data-ended="' + p.id + '">⛔ Tampon terminé (plus disponible)</button>';
+  }
+
   function openDetail(p) {
     var dlg = $("#detail");
     var romaji = p.nameRomaji && p.nameStatus !== "ok"
@@ -296,7 +323,7 @@
         (p.verifSource ? " · source : " + escapeHtml(p.verifSource) : "") + "." +
         (p.verifNote ? " " + escapeHtml(p.verifNote) : "") + "</div>"
       : '<div class="verif">⚠︎ ' + escapeHtml(DATA.meta.hoursDisclaimerFr || "Horaires à vérifier.") +
-        (p.ended ? " Ce lieu est marqué fermé / terminé dans la source." : "") + "</div>";
+        (p.endedInSource ? " Ce lieu est marqué fermé / terminé dans la source." : "") + "</div>";
 
     var html =
       '<div class="sheet-grab"></div><button class="close-x" data-close="1" aria-label="Fermer">×</button>' +
@@ -321,6 +348,7 @@
       verifBanner +
       (p.statusNote ? '<div class="verif" style="color:var(--violet);background:var(--violet-soft)">ℹ︎ ' +
         escapeHtml(p.statusNote) + (p.statusSource ? " — " + escapeHtml(p.statusSource) : "") + "</div>" : "") +
+      endedBanner(p) +
       visitField(p) +
       '<div class="field"><div class="field-label">Note personnelle</div>' +
         '<textarea class="note" data-note="' + p.id + '" placeholder="Ajouter une note…">' +
@@ -330,6 +358,7 @@
           (Store.isDone(p.id) ? "✓ Tampon obtenu" : "Marquer comme fait") + "</button>" +
         '<button class="btn" data-fav="' + p.id + '">' +
           (Store.isFav(p.id) ? "★ Favori" : "☆ Favori") + "</button>" +
+        endedButton(p) +
         (p.latitude != null ? '<button class="btn" data-showmap="' + p.id + '">🗺️ Voir sur la carte</button>' +
           '<button class="btn" data-here="' + p.id + '">📍 Je suis ici</button>' : "") +
         (p.links.googleMaps ? '<a class="btn" target="_blank" rel="noopener" href="' +
@@ -390,10 +419,16 @@
     if ((d = e.target.closest("[data-done]"))) {
       Store.toggleDone(+d.dataset.done);
       var p = PLACES.find(function (x) { return x.id === +d.dataset.done; });
-      openDetail(p); render(); if (window.RBMap) window.RBMap.refresh();
+      render(); openDetail(p); if (window.RBMap) window.RBMap.refresh();
     } else if ((d = e.target.closest("[data-fav]"))) {
       Store.toggleFav(+d.dataset.fav);
       openDetail(PLACES.find(function (x) { return x.id === +d.dataset.fav; })); render();
+    } else if ((d = e.target.closest("[data-ended]"))) {
+      var pe = PLACES.find(function (x) { return x.id === +d.dataset.ended; });
+      var nowEnded = !Store.isEnded(pe.id);
+      Store.setEnded(pe.id, nowEnded);
+      render(); openDetail(pe); if (window.RBMap) window.RBMap.refresh();
+      toast(nowEnded ? "Terminé : plus proposé dans les parcours" : "Remis en jeu");
     } else if ((d = e.target.closest("[data-showmap]"))) {
       var pm = PLACES.find(function (x) { return x.id === +d.dataset.showmap; });
       detail.close();
@@ -464,7 +499,7 @@
       "<p style='font-size:15px'><b>" + done + " / " + active.length + "</b> tampons actifs récupérés · " +
         Math.round(active.length ? done / active.length * 100 : 0) + " %</p>" +
       "<p class='meta'>Favoris : " + fav + " · Total dans la base : " + PLACES.length +
-        " (dont " + DATA.meta.ended + " fermés/terminés)</p>" + rows;
+        " (dont " + (PLACES.length - active.length) + " fermés/terminés)</p>" + rows;
     $("#stats").showModal();
   });
 
@@ -694,9 +729,11 @@
     Array.prototype.forEach.call(document.querySelectorAll("#planResults .plan-day"), function (day) {
       var n = 0;
       Array.prototype.forEach.call(day.querySelectorAll("[data-plan-done]"), function (cb) {
-        var done = Store.isDone(+cb.dataset.planDone);
+        var id = +cb.dataset.planDone, done = Store.isDone(id);
+        var p = PLACES.find(function (x) { return x.id === id; });
         cb.checked = done;
         cb.closest(".stop").classList.toggle("is-done", done);
+        cb.closest(".stop").classList.toggle("is-gone", !!(p && p.ended)); // signalé terminé entre-temps
         if (done) n++;
       });
       var c = day.querySelector("[data-day-done]");

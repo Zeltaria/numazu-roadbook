@@ -64,6 +64,7 @@
         e.done = true;
         e.visited = true;
         if (!e.visitedAt) e.visitedAt = new Date().toISOString(); // ne pas écraser une date corrigée
+        delete e.ended; delete e.endedAt; // obtenu : il n'est donc pas terminé
       } else {
         delete e.done;
         delete e.visited;
@@ -72,6 +73,18 @@
       persist();
     },
     toggleDone: function (id) { this.setDone(id, !this.isDone(id)); },
+
+    /* Tampon signalé « terminé » sur place (magasin fermé, tampon retiré…) :
+     * il sort des tampons actifs et des parcours, comme ceux que la liste
+     * officielle donne terminés. */
+    isEnded: function (id) { return !!(state.progress[id] && state.progress[id].ended); },
+    endedAt: function (id) { return (state.progress[id] && state.progress[id].endedAt) || ""; },
+    setEnded: function (id, val) {
+      var e = entry(id);
+      if (val) { e.ended = true; e.endedAt = new Date().toISOString(); }
+      else { delete e.ended; delete e.endedAt; }
+      persist();
+    },
 
     getVisitedAt: function (id) {
       return (state.progress[id] && state.progress[id].visitedAt) || "";
