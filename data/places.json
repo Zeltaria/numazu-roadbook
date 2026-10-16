@@ -6434,8 +6434,10 @@
         ]
       ],
       "closedRaw": "日曜日・祝日・水曜不定休",
-      "closedFr": "Fermé le dimanche et le mercredi (jours fériés ; fermetures irrégulières possibles)",
-      "closedDays": [],
+      "closedFr": "Fermé le dimanche et les jours fériés ; parfois le mercredi (fermetures irrégulières)",
+      "closedDays": [
+        0
+      ],
       "closedStatus": "ok",
       "irregularClosure": true,
       "priority": "Tôt",
@@ -7315,9 +7317,8 @@
         ]
       ],
       "closedRaw": "水曜日・木曜日",
-      "closedFr": "Fermé le dimanche, mercredi et le jeudi",
+      "closedFr": "Fermé le mercredi et le jeudi",
       "closedDays": [
-        0,
         3,
         4
       ],
@@ -8595,10 +8596,9 @@
         ]
       ],
       "closedRaw": "月曜日（月曜が祝日の場合、火曜日休み）",
-      "closedFr": "Fermé le lundi et le mardi (jours fériés)",
+      "closedFr": "Fermé le lundi (le mardi quand le lundi est férié)",
       "closedDays": [
-        1,
-        2
+        1
       ],
       "closedStatus": "ok",
       "irregularClosure": false,
@@ -8997,8 +8997,10 @@
         ]
       ],
       "closedRaw": "日、祝日",
-      "closedFr": "(jours fériés)",
-      "closedDays": [],
+      "closedFr": "Fermé le dimanche et les jours fériés",
+      "closedDays": [
+        0
+      ],
       "closedStatus": "ok",
       "irregularClosure": false,
       "priority": "Normal",
@@ -9006,8 +9008,8 @@
       "stampType": "physical",
       "ended": false,
       "endedKeywords": [],
-      "statusNote": "",
-      "statusSource": "",
+      "statusNote": "Boulangerie au four à pierre, à une soixantaine de mètres de Gamers Numazu (#1). Google Maps ne trouve pas toujours le numéro 添地町49 : cherche « しゃんぴによん 添地店 » ou le téléphone 055-962-2755 (le bouton « Maps » cherche la boutique par son nom). Parking derrière la boutique (4 places). L'autre boutique de la marque, à Misono-chō (三園町), est une autre adresse : le tampon est à celle de Soechi.",
+      "statusSource": "hamoni.jp, at-s.com, ville de Numazu",
       "source": "kml",
       "eventOnly": null,
       "verificationStatus": "unverified",
@@ -9018,7 +9020,7 @@
       "imageUrl": "https://mymaps.usercontent.google.com/hostedimage/m/*/3AAjQbR7oPkLO-8rq52QdbNvAiJgYfeyYHPqS4aGsqC_iWFkwOtUDsEMnwzdiip0S5asxT1451mGe8186N3YVc_eNKmO5rRcF7dcYLasNAjrQBXmk6PtQ78tE4JBGSAsm3YdqUW5EUTSWDn7oMQ9MmMNOYFIBIoqcA2_PHbsf7kr-Ux2xswn-qSHeX0jHjPP2vAJVnD4RlpN6E6UTRqXYxs-Zut3lyxLt_qk2wIkrYjAslJp6hC0S?authuser=0&fife=s16383",
       "notesFr": "",
       "links": {
-        "googleMaps": "https://www.google.com/maps/search/?api=1&query=35.1018915,138.8562424",
+        "googleMaps": "https://www.google.com/maps/search/?api=1&query=%E7%9F%B3%E7%AA%AF%E3%83%91%E3%83%B3%E5%B7%A5%E6%88%BF%20%E3%81%97%E3%82%83%E3%82%93%E3%81%B4%E3%81%AB%E3%82%88%E3%82%93%20%E6%B7%BB%E5%9C%B0%E5%BA%97%20%E6%B2%BC%E6%B4%A5%E5%B8%82%E6%B7%BB%E5%9C%B0%E7%94%BA49",
         "official": "",
         "website": ""
       }
