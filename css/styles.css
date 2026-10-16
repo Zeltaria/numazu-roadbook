@@ -238,6 +238,8 @@ textarea.note {
 .stop .check { align-self: center; margin-top: 0; }
 .stop .body[data-plan-open] { cursor: pointer; }
 .stop.is-done { opacity: .62; }
+.stop.is-gone { opacity: .45; }
+.stop.is-gone .n, .stop.is-gone .sub { text-decoration: line-through; }
 .lunch { padding: 6px 12px; font-size: 12px; color: var(--warn); background: var(--warn-soft); border-top: 1px solid var(--line); }
 .plan-excl { margin-top: 12px; }
 .plan-excl summary { cursor: pointer; font-weight: 600; font-size: 14px; padding: 6px 0; }
