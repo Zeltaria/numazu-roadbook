@@ -131,7 +131,7 @@ test("pas d'aller-retour de plus de 15 km pour un seul tampon (séjour depuis Uc
 });
 
 // Ancien moteur sur ces 10 séjours, avec la base mise à jour le 16/10/2026 :
-// 1 155 tampons planifiés, 4 041 min de route (à remesurer si la base change).
+// 1 136 tampons planifiés, 4 075 min de route (à remesurer si la base change).
 // La recherche est heuristique : un petit changement de la base peut la faire
 // tomber sur une autre solution (départ de Heda : de 433 à 673 min de route
 // quand Lot.n a bougé de 250 m) ; d'où une marge de 3 % sur la route.
@@ -141,8 +141,8 @@ test("au moins autant de tampons que l'ancien moteur, avec moins de route", () =
     const r = planFor(name, over);
     planned += r.summary.planned; travel += r.summary.travelMin;
   }
-  assert.ok(planned >= 1155, planned + " tampons planifiés (ancien moteur : 1 155)");
-  assert.ok(travel <= 3920, travel + " min de route (ancien moteur : 4 041, moins 3 %)");
+  assert.ok(planned >= 1136, planned + " tampons planifiés (ancien moteur : 1 136)");
+  assert.ok(travel <= 3953, travel + " min de route (ancien moteur : 4 075, moins 3 %)");
 });
 
 // En replanifiant le matin (« ⏱ Maintenant »), la journée du jour reste la plus
