@@ -36,17 +36,13 @@
       "zoneFr": "Centre / Gare",
       "zoneOrder": 6,
       "hoursRaw": "平日 11:00～20:00",
-      "hoursFr": "ouvert en semaine : de 11 h à 20 h ; ouvert week-end et jours fériés : de 10 h à 20 h",
+      "hoursFr": "Ouvert de 11 h à 20 h",
       "hoursStatus": "verified",
       "closingMinutes": 1200,
-      "openingMinutes": 600,
+      "openingMinutes": 660,
       "openIntervals": [
         [
           660,
-          1200
-        ],
-        [
-          600,
           1200
         ]
       ],
@@ -65,10 +61,10 @@
       "source": "kml",
       "eventOnly": null,
       "verificationStatus": "verified",
-      "lastVerified": "2026-08-01",
-      "verifNote": "Boutique tie-up officielle Love Live! Sunshine!! (corrige la coquille « 10:0 » du KML).",
-      "verifSource": "gamers.co.jp",
-      "hoursRawVerified": "平日 11:00～20:00 土日祝 10:00～20:00",
+      "lastVerified": "2026-10-18",
+      "verifNote": "Google Maps : 11 h–20 h le samedi 17 et le dimanche 18/10/2026, alors que le site de Gamers annonçait 10 h le week-end (août 2026) : on retient 11 h par prudence.",
+      "verifSource": "Google Maps (17-18/10/2026), gamers.co.jp",
+      "hoursRawVerified": "11:00～20:00（土日とも、Googleマップ）",
       "imageUrl": "https://mymaps.usercontent.google.com/hostedimage/m/*/3AAjQbR5zOFe1j8fFvyeYULqR72U7nP53wzmZoQZkRs8bOJEG7vYrMvg1wta_buitS1Na0FIzEJYM0bILS18FUcNrNKzXEEYg47_W0EFwoPCbmkJAaR8CyniaF0FAbum_EdINV6ZELCoFOzauwwxDjgWrbmQqXc8mnj62_EEfwEcbYP1toWeeR0IKCuP1cYOMKP78d6Mj7Uw?authuser=0&fife=s16383",
       "notesFr": "",
       "links": {
@@ -498,14 +494,14 @@
       "zoneFr": "Uchiura / Mito / Awashima",
       "zoneOrder": 3,
       "hoursRaw": "9:00～16:00",
-      "hoursFr": "Ouvert de 9 h à 16 h",
-      "hoursStatus": "ok",
-      "closingMinutes": 960,
+      "hoursFr": "Ouvert de 9 h à 17 h",
+      "hoursStatus": "verified",
+      "closingMinutes": 1020,
       "openingMinutes": 540,
       "openIntervals": [
         [
           540,
-          960
+          1020
         ]
       ],
       "closedRaw": "なし",
@@ -514,7 +510,7 @@
       "closedStatus": "ok",
       "irregularClosure": false,
       "priority": "Tôt",
-      "priorityReason": "Ferme vers 16 h",
+      "priorityReason": "Ferme vers 17 h",
       "stampType": "physical",
       "ended": false,
       "endedKeywords": [],
@@ -522,11 +518,11 @@
       "statusSource": "",
       "source": "kml",
       "eventOnly": null,
-      "verificationStatus": "unverified",
-      "lastVerified": null,
-      "verifNote": "",
-      "verifSource": "",
-      "hoursRawVerified": "",
+      "verificationStatus": "verified",
+      "lastVerified": "2026-10-18",
+      "verifNote": "Google Maps : 9 h–17 h le vendredi, le samedi et le dimanche 18/10/2026 (la liste officielle donnait 9:00～16:00).",
+      "verifSource": "Google Maps (17-18/10/2026)",
+      "hoursRawVerified": "9:00～17:00（Googleマップ）",
       "imageUrl": "https://mymaps.usercontent.google.com/hostedimage/m/*/3AAjQbR6KX3VhRFsz-cmfqjJhd8_95h7PmIn2azC8McwYJ4FVQG-5JIDk3dMX0tjzBbwJHk1x_T162XjtKzKL6umdSPHSWFCv-opTFdp39AGRKkyDD7DpUMk9k8_MBYdwIuKGEU28sVY6Ku_mWLb0G0RBZrm9U2vOCcEJVWHqleX9InR3yfFhhhhRwqt2Te1pULWf9cKUFHM?authuser=0&fife=s16383",
       "notesFr": "",
       "links": {
@@ -828,14 +824,14 @@
       "zoneFr": "Port / Senbon",
       "zoneOrder": 5,
       "hoursRaw": "平日10:00～18:30",
-      "hoursFr": "Ouvert de 10 h à 18 h 30",
-      "hoursStatus": "ok",
-      "closingMinutes": 1110,
+      "hoursFr": "Ouvert de 10 h à 18 h 30 (le dimanche jusqu'à 18 h)",
+      "hoursStatus": "verified",
+      "closingMinutes": 1080,
       "openingMinutes": 600,
       "openIntervals": [
         [
           600,
-          1110
+          1080
         ]
       ],
       "closedRaw": "水曜日",
@@ -846,7 +842,7 @@
       "closedStatus": "ok",
       "irregularClosure": false,
       "priority": "Normal",
-      "priorityReason": "Ferme vers 18 h 30",
+      "priorityReason": "Ferme vers 18 h le dimanche (18 h 30 les autres jours)",
       "stampType": "physical",
       "ended": false,
       "endedKeywords": [],
@@ -855,10 +851,10 @@
       "source": "kml",
       "eventOnly": null,
       "verificationStatus": "verified",
-      "lastVerified": "2026-10-17",
-      "verifNote": "Google Maps, samedi 17/10/2026 : 10 h–18 h 30, idem le vendredi, comme la liste officielle. Fermé le mercredi.",
-      "verifSource": "Google Maps (17/10/2026)",
-      "hoursRawVerified": "10:00～18:30（土曜日も）",
+      "lastVerified": "2026-10-18",
+      "verifNote": "Google Maps : 10 h–18 h 30 le vendredi et le samedi, 10 h–18 h le dimanche 18/10/2026. Fermé le mercredi.",
+      "verifSource": "Google Maps (17-18/10/2026)",
+      "hoursRawVerified": "10:00～18:30（日曜日は10:00～18:00、Googleマップ）",
       "imageUrl": "https://mymaps.usercontent.google.com/hostedimage/m/*/3AAjQbR79yf6EgpPSd4SnrY2ANuuLSZZ4_NDgUDB3FzQYyE-CnE6TKOP5AEKGv-lZQnolUqa_4cfVukVsv_kBiHVO0hqn6g81cEFCkyQgPe2R-ajt2DQyz7Q6QQqCcKuIu0D1MRNKQENrrzQJ-CbS02IPGd6zngmhyjwwuw076qxllRe6jtzaZAGSLVLRqav_tDTwyUrsXNg?authuser=0&fife=s16383",
       "notesFr": "",
       "links": {
@@ -910,8 +906,9 @@
         ]
       ],
       "closedRaw": "月曜日",
-      "closedFr": "Fermé le lundi",
+      "closedFr": "Fermé le dimanche et le lundi",
       "closedDays": [
+        0,
         1
       ],
       "closedStatus": "ok",
@@ -926,10 +923,10 @@
       "source": "kml",
       "eventOnly": null,
       "verificationStatus": "verified",
-      "lastVerified": "2026-10-17",
-      "verifNote": "Google Maps, samedi 17/10/2026 : midi 11 h 30–15 h et soir 17 h–20 h 30, idem le vendredi (la liste officielle donnait seulement le midi, 11:30～15:00).",
-      "verifSource": "Google Maps (17/10/2026)",
-      "hoursRawVerified": "昼 11:30～15:00、夜 17:00～20:30（Googleマップ）",
+      "lastVerified": "2026-10-18",
+      "verifNote": "Google Maps : midi 11 h 30–15 h et soir 17 h–20 h 30 le vendredi et le samedi ; fermé le dimanche 18/10/2026 (« 定休日 », réouverture lundi 11 h 30). La liste officielle donnait seulement le midi et une fermeture le lundi : on garde les deux jours de fermeture par prudence.",
+      "verifSource": "Google Maps (17-18/10/2026)",
+      "hoursRawVerified": "昼 11:30～15:00、夜 17:00～20:30、日曜定休（Googleマップ）",
       "imageUrl": "https://mymaps.usercontent.google.com/hostedimage/m/*/3AAjQbR4l554wAhlnXn-EF7OPOMG5HIfl7kXLe6eZt6sVMNdSStWwp9Po82CU8lwtBk7aqUzWID0rCRCXT-fJGdANsVCo0g5W2uHlulLFI4I7vozGdwusf6RuE_1HVwWXG7sdbczFjO617y-Gv2ix6pc4mzvWQMJjcqjsrrqw90JUQFE4n7u7GETkSYvfNBsipsjOI_QQ1CE?authuser=0&fife=s16383",
       "notesFr": "",
       "links": {
@@ -1629,13 +1626,13 @@
       "zoneFr": "Port / Senbon",
       "zoneOrder": 5,
       "hoursRaw": "9:00～21:00",
-      "hoursFr": "Ouvert de 9 h à 20 h",
+      "hoursFr": "Dimanche : de 10 h à 20 h ; samedi : de 9 h à 20 h",
       "hoursStatus": "verified",
       "closingMinutes": 1200,
-      "openingMinutes": 540,
+      "openingMinutes": 600,
       "openIntervals": [
         [
-          540,
+          600,
           1200
         ]
       ],
@@ -1656,10 +1653,10 @@
       "source": "kml",
       "eventOnly": null,
       "verificationStatus": "verified",
-      "lastVerified": "2026-10-17",
-      "verifNote": "Google Maps, samedi 17/10/2026 : 9 h–20 h, idem le vendredi (la liste officielle donnait 9:00～21:00).",
-      "verifSource": "Google Maps (17/10/2026)",
-      "hoursRawVerified": "9:00～20:00（Googleマップ）",
+      "lastVerified": "2026-10-18",
+      "verifNote": "Google Maps : 9 h–20 h le vendredi et le samedi, 10 h–20 h le dimanche 18/10/2026 (la liste officielle donnait 9:00～21:00). Fermé le lundi (le mardi quand le lundi est férié).",
+      "verifSource": "Google Maps (17-18/10/2026)",
+      "hoursRawVerified": "日曜日 10:00～20:00、土曜日 9:00～20:00（Googleマップ）",
       "imageUrl": "https://mymaps.usercontent.google.com/hostedimage/m/*/3AAjQbR7jQvWGP9rDAKWVCUOyUQYdXsQf7OiaQZNvE3y5y7oRHzHIgrKmCOOo5wGvFSots4hP4buTr43CiFB0_Og-0MeyBT2JziUN7ujtpkHjtF8XQS2zz_4V_1Q01eu64Bf-9j8B7I257bwYsXWl0uhUpwexHrM20LebR0Un7AscJcWXd5a6c0S51qZNyVwTwXg6AKgMrwI?authuser=0&fife=s16383",
       "notesFr": "",
       "links": {
@@ -5482,8 +5479,10 @@
         ]
       ],
       "closedRaw": "不定休",
-      "closedFr": "Fermeture irrégulière",
-      "closedDays": [],
+      "closedFr": "Fermé le dimanche, et fermetures irrégulières",
+      "closedDays": [
+        0
+      ],
       "closedStatus": "ok",
       "irregularClosure": true,
       "priority": "Normal",
@@ -5496,10 +5495,10 @@
       "source": "kml",
       "eventOnly": null,
       "verificationStatus": "verified",
-      "lastVerified": "2026-10-17",
-      "verifNote": "Google Maps, samedi 17/10/2026 : 9 h–18 h, idem le vendredi, comme la liste officielle. Fermetures irrégulières.",
-      "verifSource": "Google Maps (17/10/2026)",
-      "hoursRawVerified": "9:00～18:00",
+      "lastVerified": "2026-10-18",
+      "verifNote": "Google Maps : 9 h–18 h le vendredi et le samedi ; fermé le dimanche 18/10/2026 (« 定休日 », réouverture lundi 9 h).",
+      "verifSource": "Google Maps (17-18/10/2026)",
+      "hoursRawVerified": "9:00～18:00、日曜定休（Googleマップ）",
       "imageUrl": "https://mymaps.usercontent.google.com/hostedimage/m/*/3AAjQbR7otupwsBTflkWw8-y10loZxrSIPSWP2TkdKL-MXFfsbhTsLG8VEXY9SxoX90x4yCwyVUbIOHHyCW7UgdDUWh14KsjaeDcNPfiQg3WLMjYmSvNOuX8Jns0EaMuUoAM62joDt6ug08wEher11Lc2A7dehGmUrQdn9MhLMURKijN89qJ92E0lIyMTg9KS-pvYNddrEZg?authuser=0&fife=s16383",
       "notesFr": "",
       "links": {
@@ -6528,7 +6527,7 @@
       "zoneFr": "Centre / Gare",
       "zoneOrder": 6,
       "hoursRaw": "11:30～19:00",
-      "hoursFr": "Samedi : seulement le soir, de 18 h à 21 h ; vendredi : de 11 h 30 à 15 h et de 18 h à 23 h",
+      "hoursFr": "Samedi : seulement le soir, de 18 h à 21 h ; vendredi : de 11 h 30 à 15 h et de 18 h à 23 h ; fermé le dimanche",
       "hoursStatus": "verified",
       "closingMinutes": 1260,
       "openingMinutes": 1080,
@@ -6539,8 +6538,10 @@
         ]
       ],
       "closedRaw": "不定休",
-      "closedFr": "Fermeture irrégulière",
-      "closedDays": [],
+      "closedFr": "Fermé le dimanche, et fermetures irrégulières",
+      "closedDays": [
+        0
+      ],
       "closedStatus": "ok",
       "irregularClosure": true,
       "priority": "Normal",
@@ -6553,10 +6554,10 @@
       "source": "kml",
       "eventOnly": null,
       "verificationStatus": "verified",
-      "lastVerified": "2026-10-17",
-      "verifNote": "Google Maps, samedi 17/10/2026 : ouvert seulement le soir, 18 h–21 h ; le vendredi 11 h 30–15 h et 18 h–23 h (la liste officielle donnait 11:30～19:00). Dimanche pas encore vérifié : appeler avant d'y aller.",
-      "verifSource": "Google Maps (17/10/2026)",
-      "hoursRawVerified": "土曜日 18:00～21:00、金曜日 11:30～15:00・18:00～23:00（Googleマップ）",
+      "lastVerified": "2026-10-18",
+      "verifNote": "Google Maps : le samedi, ouvert seulement le soir (18 h–21 h) ; le vendredi 11 h 30–15 h et 18 h–23 h ; fermé le dimanche 18/10/2026 (« 定休日 »). La liste officielle donnait 11:30～19:00.",
+      "verifSource": "Google Maps (17-18/10/2026)",
+      "hoursRawVerified": "土曜日 18:00～21:00、金曜日 11:30～15:00・18:00～23:00、日曜定休（Googleマップ）",
       "imageUrl": "https://mymaps.usercontent.google.com/hostedimage/m/*/3AAjQbR6EFIUD6gFgyMSrslkP5fLq64GVVHT7xK46WBv8PWc15KNq2eGYZsFbkRyoC1JGfY8tKLQ1yOXHd0CroDbM_8ce37Bav1Zvh-lzeAEDQSdRsfi6KgeRQuE6c5pg_TsWRo5mK9vVlNYYfYLLTjtW871ktmLxxHDeuVlwKygQhs1938CEDtaRxf81NcVH8wg3X9TFh6o?authuser=0&fife=s16383",
       "notesFr": "",
       "links": {
@@ -7873,14 +7874,14 @@
       "zoneFr": "Nord / périphérie",
       "zoneOrder": 8,
       "hoursRaw": "土曜・日曜10:00～16:00(L.O.15:30)",
-      "hoursFr": "Samedi et dimanche : de 9 h 30 à 16 h (dernière commande 15 h 30)",
+      "hoursFr": "Dimanche : de 9 h 30 à 17 h ; samedi : de 9 h 30 à 16 h",
       "hoursStatus": "verified",
-      "closingMinutes": 960,
+      "closingMinutes": 1020,
       "openingMinutes": 570,
       "openIntervals": [
         [
           570,
-          960
+          1020
         ]
       ],
       "closedRaw": "月～金",
@@ -7895,7 +7896,7 @@
       "closedStatus": "ok",
       "irregularClosure": false,
       "priority": "Tôt",
-      "priorityReason": "Ferme vers 16 h",
+      "priorityReason": "Ferme vers 17 h le dimanche (16 h le samedi)",
       "stampType": "physical",
       "ended": false,
       "endedKeywords": [],
@@ -7904,10 +7905,10 @@
       "source": "kml",
       "eventOnly": null,
       "verificationStatus": "verified",
-      "lastVerified": "2026-10-17",
-      "verifNote": "Google Maps, samedi 17/10/2026 : 9 h 30–16 h (la liste officielle donnait 10:00～16:00). Ouvert seulement le samedi et le dimanche.",
-      "verifSource": "Google Maps (17/10/2026)",
-      "hoursRawVerified": "土・日 9:30～16:00（L.O.15:30）（Googleマップ）",
+      "lastVerified": "2026-10-18",
+      "verifNote": "Google Maps : 9 h 30–16 h le samedi, 9 h 30–17 h le dimanche 18/10/2026 (la liste officielle donnait 10:00～16:00, dernière commande 15 h 30). Ouvert seulement le samedi et le dimanche.",
+      "verifSource": "Google Maps (17-18/10/2026)",
+      "hoursRawVerified": "日曜日 9:30～17:00、土曜日 9:30～16:00（Googleマップ）",
       "imageUrl": "https://mymaps.usercontent.google.com/hostedimage/m/*/3AAjQbR6pNzuPpOe0JzesuaXa-zeDyg-1jirqXyiujw2cKDyk17eiCWYPv24jRDSLqNEwjz3WeX6Rip99Da8BfOYFcutilZVYg48NBFBpAba5eOsi2B_dPs0t8HKipHwxXURai3BCc6VNMb5Be7Tfp07J2_WFW5LFMNH_ixKWLEdKtfxQiqjTpKK-lQjZhwUxrCb3IcVETGbDYJKBc4NI0r0UOZebCVlUvhXWEetIEEGZbtjZH--p?authuser=0&fife=s16383",
       "notesFr": "",
       "links": {
